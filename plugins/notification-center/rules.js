@@ -102,13 +102,6 @@ function makeLimiter() {
     };
 }
 
-// The boost of every sound, in percent: 100-300 (below or above is brought to the limit; anything that is not a number keeps the fallback).
-function gainOf(v, fallback) {
-    var n = num(v);
-    if (n !== n) { return fallback; }
-    return n < 100 ? 100 : (n > 300 ? 300 : n);
-}
-
 function minutes(hhmm) {
     var m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(str(hhmm));
     return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : -1;
@@ -123,7 +116,8 @@ function sanitizeSettings(s, old) {
         quiet: { enabled: has(q, 'enabled') ? q.enabled === true : oq.enabled === true, from: from, to: to, allow: allow },
         groupSeconds: has(s, 'groupSeconds') ? clampInt(s.groupSeconds, 0, 3600, 0) : (has(old, 'groupSeconds') ? old.groupSeconds : 60),
         strict: has(s, 'strict') ? s.strict === true : old.strict === true,
-        soundGain: has(s, 'soundGain') ? gainOf(s.soundGain, has(old, 'soundGain') ? gainOf(old.soundGain, 200) : 200) : (has(old, 'soundGain') ? gainOf(old.soundGain, 200) : 200)
+        soundVolume: has(s, 'soundVolume') ? clampInt(s.soundVolume, 10, 100, has(old, 'soundVolume') ? clampInt(old.soundVolume, 10, 100, 100) : 100) : (has(old, 'soundVolume') ? clampInt(old.soundVolume, 10, 100, 100) : 100),
+        soundLeadMs: has(s, 'soundLeadMs') ? clampInt(s.soundLeadMs, 0, 2000, has(old, 'soundLeadMs') ? clampInt(old.soundLeadMs, 0, 2000, 800) : 800) : (has(old, 'soundLeadMs') ? clampInt(old.soundLeadMs, 0, 2000, 800) : 800)
     };
 }
 function defaultSettings() { return sanitizeSettings({}, {}); }

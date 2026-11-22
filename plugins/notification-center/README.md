@@ -17,7 +17,7 @@ returns the same description as JSON. Apps that already publish to [ntfy](https:
 rate limit and key (`X-NC-Key`); quiet hours hold back everything below a chosen level; identical repeats are counted instead of shown again; and **webhooks**
 (`POST hook/<name>`) turn any JSON, such as a GitHub or Home Assistant payload, into a notification with `{{path}}` templates.
 
-**Sounds** (optional): a request can ask for one of the TV's system sounds with `sound` (and `volume`); the default is silence. This Shard plays it with one fixed `paplay` command (see Permissions), at most one sound every 0.8 s, with a boost you set in the **Testing** tab (the system sounds are quiet).
+**Sounds** (optional): a request can ask for one of the TV's system sounds with `sound` (and `volume`); the default is silence. This Shard plays it with one fixed `paplay` command (see Permissions), at most one sound every 0.8 s, with a volume you set next to the selector (the system sounds are quiet, so 100 % is already boosted), and in time with the banner (the Shard measures how long the banner takes on your TV). The **Testing** tab has the sound tests, the timing, and a goodie: 10 seconds of a well-known tune played only with the notification sounds.
 
 The panel (tab **Notifications**) is bilingual (English by default, Portuguese optional) and has a form, a request generator, an API explorer, an icon
 picker (emoji list bundled in `emoji.json`: Unicode CLDR data from [emojibase-data](https://github.com/milesj/emojibase), MIT, no network) and an
@@ -31,9 +31,9 @@ installation status card.
 
 | Command | Why |
 | --- | --- |
-| `paplay --volume=<integer> /usr/share/feedback/sound/operation/<file>.wav` | plays one of the TV's own system sounds when a notification asks for one (`sound`). `<file>` is one of 8 fixed names, the integer is the volume (10-100 %) times the boost (100-300 %) of 65536, and nothing else is ever run |
+| `paplay --volume=<integer> /usr/share/feedback/sound/operation/<file>.wav` | plays one of the TV's own system sounds when a notification asks for one (`sound`). `<file>` is one of 8 fixed names, the integer is 65536 times the volume you set (10-100 %) times the request's `volume` times 3 (the system sounds are quiet), and nothing else is ever run |
 
-It runs only when a request has a `sound` (or calls `POST play`), at most once every 0.8 s, with an 8 second timeout. It is the only use of `exec` in the code, and the tests check the exact shape of every command.
+It runs only when a request has a `sound` (or calls `POST play`), at most once every 0.8 s, with an 8 second timeout. The goodie (`POST play` with `song`) runs the same command several times in a row from a fixed list in the code (10 seconds, one song at a time). It is the only use of `exec` in the code, and the tests check the exact shape of every command.
 ## Network
 
 - **Incoming:** HTTP routes under `/plugins/notification-center/api/` (`notify`, `ntfy`, `notifications`, `img`, `recent`, `lang`, `emoji`, `status`,

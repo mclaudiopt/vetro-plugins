@@ -114,8 +114,8 @@ A sound can be chosen with the header `Sound` (or the JSON field `sound`, and `v
 | `GET img?id=<id>[&kind=wallpaper][&info=1]` | The picture of a queued notification; `info=1` returns `{ok,type,bytes}` or `{ok:false,error}` (use it to check a URL). |
 | `GET status` | `{version, app, appVersion, service, handoff, pairing:"on"\|"off"\|"unknown"}`: is the companion app and its banner service installed, is Vetro pairing on, did the Shard write the queue file the banner service reads (`handoff`). |
 | `GET lang` / `POST lang` | Display language `{lang:"en"|"pt"}`, shared by the panel and the TV screen. |
-| `GET sounds` | `{sounds:[...], available, gain, last}`: the sounds a request can choose, whether this Shard can play them (`exec` granted), the boost in percent (`soundGain`) and the result of the last attempt. |
-| `POST play` | `{sound, volume?}`: play one sound without a notification (answer `{ok:true,sound:"requested"}`, `400` for an unknown name, `429` if another sound was played less than 0.8 s ago). |
+| `GET sounds` | `{sounds:[...], songs:[{name,title}], available, volume, leadMs, latencyMs, last}`: the sounds a request can choose, the tunes of `POST play`, whether this Shard can play them (`exec` granted), the two sound settings, how long the banner takes on this TV (`latencyMs`, measured by the Shard) and the result of the last attempt. |
+| `POST play` | `{sound, volume?}`: play one sound without a notification (answer `{ok:true,sound:"requested"}`, `400` for an unknown name, `429` if another sound was played less than 0.8 s ago). `{song:"rock"}` or `{song:"fate"}`: a goodie, about 10 seconds of a well-known tune (*We Will Rock You*, the start of Beethoven's 5th) made only of these sounds and recognised by the rhythm; one song at a time (`409` while one plays), `{song:"stop"}` stops it. |
 | `GET emoji` | The bundled emoji list (Unicode CLDR, MIT) used by the panel's icon picker. |
 
 ## Sources, quiet hours, grouping and webhooks
@@ -131,8 +131,8 @@ A sound can be chosen with the header `Sound` (or the JSON field `sound`, and `v
 
 | Route | What it does |
 |---|---|
-| `GET settings` | `{settings:{quiet:{enabled,from,to,allow},groupSeconds,strict,soundGain}}` |
-| `POST settings` | Send only what changes. `quiet`: between `from` and `to` (`"22:00"` to `"07:00"`, TV local time, may cross midnight) nothing is shown below the level `allow` (`alert` lets only alerts through, `warn` lets warnings and alerts, `none` silences everything); suppressed ones are still listed in `GET recent`. `groupSeconds` (0-3600, default 60, `0` = off): a notification identical to one from the last `groupSeconds` (same source, title, message and level) is counted (`count` in `GET recent`) instead of shown again. `strict: true` rejects notifications whose `source` has no profile. `soundGain` (100-300, default 200) is the boost of every sound, in percent: the TV's system sounds are quiet, and above about 250 some distort. |
+| `GET settings` | `{settings:{quiet:{enabled,from,to,allow},groupSeconds,strict,soundVolume,soundLeadMs}}` |
+| `POST settings` | Send only what changes. `quiet`: between `from` and `to` (`"22:00"` to `"07:00"`, TV local time, may cross midnight) nothing is shown below the level `allow` (`alert` lets only alerts through, `warn` lets warnings and alerts, `none` silences everything); suppressed ones are still listed in `GET recent`. `groupSeconds` (0-3600, default 60, `0` = off): a notification identical to one from the last `groupSeconds` (same source, title, message and level) is counted (`count` in `GET recent`) instead of shown again. `strict: true` rejects notifications whose `source` has no profile. `soundVolume` (10-100 %, default 100) is the volume of every sound (the system sounds are quiet, so 100 % is already boosted; the `volume` of a request is a share of it). `soundLeadMs` (0-2000, default 800) is how long before the banner the sound starts: the banner appears some seconds after the request, so the Shard measures that delay on your TV and starts the sound that much later minus this lead (about the time `paplay` needs to start). |
 
 **Webhooks** turn any JSON a service already sends (GitHub, Home Assistant, Grafana, a router) into a notification, without changing the sender:
 

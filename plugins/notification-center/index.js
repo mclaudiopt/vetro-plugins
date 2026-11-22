@@ -14,6 +14,9 @@ var rules = require('./rules.js');
 
 var MAX_HOOK_BODY = 65536;
 var SOUND_DIR = '/usr/share/feedback/sound/operation/', SOUND_GAP_MS = 800;
+// The sound waits for the banner: Vetro needs a few seconds to start the banner service, which then records the id in this file (see app/service.js).
+// If the id never shows up there, the sound plays after SOUND_WAIT_MS anyway.
+var SEEN_FILE = '/tmp/notification-center-seen.json', SOUND_WAIT_MS = 5000, SOUND_POLL_MS = 150;
 // The TV's system sounds a request can choose (the names are the closed list in rules.js).
 var SOUND_FILES = { chime: 'normal_noti.wav', soft: 'select.wav', reward: 'vi_reward.wav', success: 'vi_success.wav', alert: 'vi_fail.wav', rotation: 'p_rotation_fail.wav', open: 'home_open.wav', poweron: 'power_on.wav' };
 var MAX_TITLE = 40, MAX_MESSAGE = 200, MAX_QUEUE = 5, MAX_RECENT = 20, MAX_BODY = 8192, MAX_ICON = 16;
@@ -31,7 +34,12 @@ module.exports = function (ctx) {
     var vetro = ctx.vetro && typeof ctx.vetro === 'object' ? ctx.vetro : {};
     var VHOST = typeof vetro.host === 'string' ? vetro.host : '127.0.0.1', VPORT = typeof vetro.port === 'number' ? vetro.port : 8099;
     var soundLast = null, soundAt = 0;
-    if (typeof ctx.sound === 'object' && ctx.sound && typeof ctx.sound.gapMs === 'number') { SOUND_GAP_MS = ctx.sound.gapMs; }   // only a test changes this
+    var seenFile = SEEN_FILE, soundWaitMs = SOUND_WAIT_MS, waitingSounds = {};   // waitingSounds: notification id -> {fire, timer}
+    if (typeof ctx.sound === 'object' && ctx.sound) {   // only a test changes these
+        if (typeof ctx.sound.gapMs === 'number') { SOUND_GAP_MS = ctx.sound.gapMs; }
+        if (typeof ctx.sound.waitMs === 'number') { soundWaitMs = ctx.sound.waitMs; }
+        if (typeof ctx.sound.seenFile === 'string') { seenFile = ctx.sound.seenFile; }
+    }
     var queue = [];      // active notifications (memory only)
     var recent = [];     // last ones sent, for the page; kept in ctx.config so they survive a restart or an update
     try { var saved = (ctx.config.get() || {}).recent; if (Array.isArray(saved)) { recent = saved.slice(0, MAX_RECENT); } } catch (e) { recent = []; }
@@ -200,6 +208,26 @@ module.exports = function (ctx) {
         }, function (e) { soundLast = { at: now, ok: false, error: str(e && e.message).slice(0, 160) || 'exec failed' }; });
         return 'requested';
     }
+    // The sound goes with the banner, not before it. Banner mode: wait until the banner service has recorded the id (polling its file), full and both:
+    // wait until the app screen asks for the queue; in every case play after soundWaitMs at the latest. open:false notifications (never shown) play at once.
+    function scheduleSound(note) {
+        var entry = { timer: null, done: false }, started = Date.now();
+        function fire() {
+            if (entry.done) { return; }
+            entry.done = true; clearTimeout(entry.timer); delete waitingSounds[note.id];
+            playSound(note.sound, note.volume);
+        }
+        entry.fire = fire; waitingSounds[note.id] = entry;
+        function shown() { try { return has(JSON.parse(fs.readFileSync(seenFile, 'utf8')), note.id); } catch (e) { return false; } }
+        function tick() {
+            if (entry.done) { return; }
+            if (note.mode === 'banner' && shown()) { return fire(); }
+            if (Date.now() - started >= soundWaitMs) { return fire(); }
+            entry.timer = setTimeout(tick, SOUND_POLL_MS);
+        }
+        if (note.mode === 'banner') { entry.timer = setTimeout(tick, SOUND_POLL_MS); } else { entry.timer = setTimeout(fire, soundWaitMs); }
+    }
+    function cancelSounds() { Object.keys(waitingSounds).forEach(function (id) { var e = waitingSounds[id]; e.done = true; clearTimeout(e.timer); }); waitingSounds = {}; }
     function soundAvailable() { return typeof ctx.execute === 'function'; }
 
     // Installation status for the panel: is the companion app (and its service) installed, is Vetro pairing on, which Shard version.
@@ -480,7 +508,10 @@ module.exports = function (ctx) {
             saveRecent();
             var opened = b.open === false ? 'not requested' : openApp(note.mode === 'banner');
             // The sound is asked for only now: not for a notification held back by quiet hours or merged as a repeat.
-            var soundState = note.sound ? playSound(note.sound, note.volume) : 'none';
+            var soundState = 'none';
+            if (note.sound) {
+                if (b.open === false || soundWaitMs <= 0) { soundState = playSound(note.sound, note.volume); } else { scheduleSound(note); soundState = 'requested'; }
+            }
             sendJson(res, 200, { ok: true, id: note.id, open: opened, sound: soundState });
         }
     }
@@ -544,7 +575,7 @@ module.exports = function (ctx) {
 
     return {
         start: function () {},
-        stop: function () { abortFetches(); queue = []; writeQueueFile(); },
+        stop: function () { abortFetches(); cancelSounds(); queue = []; writeQueueFile(); },
         status: function () { prune(); return { queued: queue.length, appId: appId() }; },
         route: function (req, res, sub) {
             sub = String(sub || '').split('?')[0].replace(/^\/+|\/+$/g, '');
@@ -564,7 +595,10 @@ module.exports = function (ctx) {
             if (sub === 'nt.js' && req.method === 'GET') { sendFile(res, 'nt.js', 'application/javascript; charset=utf-8'); return true; }
             if (sub === 'notify' && req.method === 'POST') { handleNotify(req, res); return true; }
             if (sub === 'notifications' && req.method === 'GET') {
-                if (/[?&]src=app(&|$)/.test(String(req.url || ''))) { appPoll = /[?&]bye=1(&|$)/.test(String(req.url || '')) ? 0 : Date.now(); }
+                if (/[?&]src=app(&|$)/.test(String(req.url || ''))) {
+                    appPoll = /[?&]bye=1(&|$)/.test(String(req.url || '')) ? 0 : Date.now();
+                    if (appPoll) { queue.forEach(function (n) { if (n.mode !== 'banner' && has(waitingSounds, n.id)) { waitingSounds[n.id].fire(); } }); }
+                }
                 prune();
                 var now = Date.now();
                 var out = { lang: getLang(), notifications: queue.map(function (n) {

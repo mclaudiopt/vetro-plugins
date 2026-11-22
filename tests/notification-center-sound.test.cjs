@@ -20,7 +20,7 @@ function start(options = {}) {
     const ctx = {
         id: 'notification-center', dir: fs.mkdtempSync(path.join(os.tmpdir(), 'nc-sound-')),
         config: {get: () => JSON.parse(JSON.stringify(config)), set: v => { config = JSON.parse(JSON.stringify(v)); }},
-        sound: {gapMs: options.gapMs === undefined ? 0 : options.gapMs}
+        sound: {gapMs: options.gapMs === undefined ? 0 : options.gapMs, waitMs: options.waitMs === undefined ? 0 : options.waitMs, seenFile: options.seenFile}
     };
     if (options.execute !== null) {
         ctx.execute = cmd => {
@@ -222,4 +222,52 @@ test('the Shard has no other use of exec: the only command string in the source 
     assert.match(source, /ctx\.execute\('paplay --volume=' \+ v \+ ' ' \+ SOUND_DIR \+ SOUND_FILES\[name\]/);
     assert.deepEqual(Object.keys(rules.SOUNDS), ['chime', 'soft', 'reward', 'success', 'alert', 'rotation', 'open', 'poweron']);
     assert.ok(!fs.readFileSync(path.join(folder, 'rules.js'), 'utf8').includes('execute'));
+});
+
+test('the sound waits for the banner: it plays when the banner service has recorded the id, not before', async () => {
+    const seenFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'nc-seen-')), 'seen.json');
+    await withShard(async (s, commands) => {
+        const r = await call(s, 'POST', 'notify', {message: 'wait for me', sound: 'reward'});
+        assert.equal(r.json.sound, 'requested');
+        await wait(400);
+        assert.deepEqual(commands, [], 'nothing yet: the banner is not on screen');
+        fs.writeFileSync(seenFile, JSON.stringify({[r.json.id]: 1}));
+        await wait(500);
+        assert.equal(commands.length, 1);
+        assert.match(commands[0], /vi_reward\.wav$/);
+    }, {waitMs: 5000, seenFile});
+});
+
+test('if the banner is never recorded the sound still plays after the wait', () => withShard(async (s, commands) => {
+    await call(s, 'POST', 'notify', {message: 'late banner', sound: 'chime'});
+    await wait(200);
+    assert.equal(commands.length, 0);
+    await wait(600);
+    assert.equal(commands.length, 1);
+}, {waitMs: 500, seenFile: path.join(os.tmpdir(), 'nc-no-such-seen-file.json')}));
+
+test('full-screen and both: the sound plays when the app screen asks for the queue', () => withShard(async (s, commands) => {
+    await call(s, 'POST', 'notify', {message: 'card', sound: 'success', mode: 'full'});
+    await wait(300);
+    assert.equal(commands.length, 0);
+    await call(s, 'GET', 'notifications?src=app');
+    await wait(100);
+    assert.equal(commands.length, 1);
+    assert.match(commands[0], /vi_success\.wav$/);
+    await call(s, 'GET', 'notifications?src=app');
+    await wait(100);
+    assert.equal(commands.length, 1, 'only once');
+}, {waitMs: 5000}));
+
+test('a notification that is only queued (open:false) plays its sound at once, and stop() cancels a pending sound', async () => {
+    await withShard(async (s, commands) => {
+        await call(s, 'POST', 'notify', {message: 'silent queue', sound: 'chime', open: false});
+        await wait(80);
+        assert.equal(commands.length, 1);
+    }, {waitMs: 5000});
+    const s = start({waitMs: 300, seenFile: path.join(os.tmpdir(), 'nc-no-such-seen-file.json')});
+    await call(s.shard, 'POST', 'notify', {message: 'cancelled', sound: 'chime'});
+    s.shard.stop();
+    await wait(600);
+    assert.equal(s.commands.length, 0, 'stop() cancelled the pending sound');
 });

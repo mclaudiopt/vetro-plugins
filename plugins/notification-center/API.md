@@ -36,7 +36,7 @@ JSON body. Only `message` is required.
 | `seconds` | integer 5-300 | `30` | How long it may wait in the queue (always at least `duration` + 20). |
 | `open` | boolean | `true` | `false` only queues it, without launching the app or its service. |
 | `source` | string, max 32 (`a-z 0-9 . _ -`) | none | Who is sending (or the header `X-NC-Source`). If a source with that name exists, its defaults, key, on/off switch and rate limit apply, see "Sources". |
-| `sound` | `chime` `soft` `reward` `success` `alert` `rotation` `open` `poweron` | none | Plays that TV system sound with the notification. Played by this Shard itself (one fixed `paplay` command), at most one sound every 0.8 s. Not played for a notification held back by quiet hours or merged as a repeat. |
+| `sound` | `chime` `soft` `reward` `success` `alert` `rotation` `open` `poweron` | none | Plays that TV system sound with the notification. Played by this Shard itself (one fixed `paplay` command), at most one sound every 0.8 s. It plays when the notification appears, not when it is queued: the Shard waits for the banner service to show the banner (at most 5 s), or for the app screen to ask for a card; with `open: false` (nothing is shown) it plays at once. Not played for a notification held back by quiet hours or merged as a repeat. |
 | `volume` | integer 10-100 | `100` | Volume of the sound, in percent. |
 
 Answer: `{"ok":true,"id":"1-abc","open":"requested","sound":"none"}` (`sound` is `"requested"` when a sound was asked for). Errors: `400 {"error":"message is required"}` or `"invalid JSON"`; `403` (`invalid key for this source`, `source is disabled`, `unknown source`); `429` (`rate limit for this source`).

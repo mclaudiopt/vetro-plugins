@@ -64,8 +64,8 @@
         "exec"
       ],
       "url": "dist/notification-center-0.5.0.vplugin",
-      "sha256": "dc075937e4e00ec7065e1ba66c39b5ea8c4c774bb4c66bae1c63fc4631d50436",
-      "size": 350978
+      "sha256": "f0c270db5d2a5af4fb765a62c65016b27f692eac7f4a67f1d777d3ed7c8e0751",
+      "size": 353903
     },
     {
       "id": "prometheus",

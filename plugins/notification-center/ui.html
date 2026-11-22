@@ -292,9 +292,9 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
           <div class="row" id="tsounds"></div>
           <div class="lab" style="margin-top:12px" data-t="f_mvol">Sound volume (%)</div>
           <div class="row"><input type="range" id="tmvol" min="10" max="100" step="5" value="100" style="flex:1"><b id="tmvolv">100%</b></div>
-          <div class="lab" style="margin-top:12px" data-t="f_lead">The sound starts this long before the banner (ms)</div>
-          <div class="row"><input type="range" id="tlead" min="0" max="2000" step="50" value="800" style="flex:1"><b id="tleadv">800 ms</b></div>
-          <div class="msg" id="tlatency" style="padding:4px 0 0"></div>
+          <div class="lab" style="margin-top:12px" data-t="f_delay">The sound starts this long after the notification is sent (ms)</div>
+          <div class="row"><input type="range" id="tdelay" min="0" max="8000" step="100" value="3000" style="flex:1"><b id="tdelayv">3000 ms</b></div>
+          <div class="msg" style="padding:4px 0 0" data-t="f_delay_note">The banner appears a few seconds after the request. Press "Send a notification with this sound" below and move this slider until the sound and the banner arrive together.</div>
           <div class="lab" style="margin-top:12px" data-t="f_vol">Volume (%)</div>
           <div class="row"><input type="range" id="tvol" min="10" max="100" step="5" value="100" style="flex:1"><b id="tvolv">100%</b></div>
           <div class="row" style="margin-top:12px"><button type="button" class="send" id="tsend" data-t="t_send_sound">Send a notification with this sound</button></div>
@@ -735,10 +735,10 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
   // forms and the Testing tab.
   (function () {
     var X = {
-      en: { test_tab: "Testing", t_show: "Test on the TV", t_show_note: "Each button sends a real test notification to the TV.", t_sound: "Sounds", f_mvol: "Sound volume (%)", f_lead: "The sound starts this long before the banner (ms)", t_goodie: "Goodie", t_goodie_note: "About 10 seconds of a well-known tune, played only with the notification sounds (you recognise it by the rhythm).", t_stop: "Stop", t_delay: "Measured banner delay on this TV:", f_sound: "Sound", f_vol: "Volume (%)", no_sound: "No sound",
+      en: { test_tab: "Testing", t_show: "Test on the TV", t_show_note: "Each button sends a real test notification to the TV.", t_sound: "Sounds", f_mvol: "Sound volume (%)", f_delay: "The sound starts this long after the notification is sent (ms)", f_delay_note: "The banner appears a few seconds after the request. Press the button \"Send a notification with this sound\" below and move this slider until the sound and the banner arrive together.", t_goodie: "Goodie", t_goodie_note: "About 10 seconds of a well-known tune, played only with the notification sounds (you recognise it by the rhythm).", t_stop: "Stop", f_sound: "Sound", f_vol: "Volume (%)", no_sound: "No sound",
         t_send_sound: "Send a notification with this sound", t_pick: "Tapping a sound plays it. Then press Send to try it in a notification.", t_missing: "This Shard cannot play sounds (the exec permission was not granted).",
         t_ready: "Sound Shard found.", t_sent: "Sent", t_none: "Pick a sound first" },
-      pt: { test_tab: "Testes", t_show: "Testar na TV", t_show_note: "Cada botão envia uma notificação de teste real para a TV.", t_sound: "Sons", f_mvol: "Volume do som (%)", f_lead: "O som começa este tempo antes do banner (ms)", t_goodie: "Surpresa", t_goodie_note: "Cerca de 10 segundos de uma música conhecida, tocada só com os sons de notificação (reconhece-se pelo ritmo).", t_stop: "Parar", t_delay: "Atraso do banner medido nesta TV:", f_sound: "Som", f_vol: "Volume (%)", no_sound: "Sem som",
+      pt: { test_tab: "Testes", t_show: "Testar na TV", t_show_note: "Cada botão envia uma notificação de teste real para a TV.", t_sound: "Sons", f_mvol: "Volume do som (%)", f_delay: "O som começa este tempo depois de a notificação ser enviada (ms)", f_delay_note: "O banner aparece alguns segundos depois do pedido. Carregue no botão \"Enviar uma notificação com este som\" e mexa neste controlo até o som e o banner chegarem juntos.", t_goodie: "Surpresa", t_goodie_note: "Cerca de 10 segundos de uma música conhecida, tocada só com os sons de notificação (reconhece-se pelo ritmo).", t_stop: "Parar", f_sound: "Som", f_vol: "Volume (%)", no_sound: "Sem som",
         t_send_sound: "Enviar uma notificação com este som", t_pick: "Escolha um som e carregue em Enviar. Tocar num som também o reproduz.", t_missing: "Este Shard não pode tocar sons (a permissão exec não foi concedida).",
         t_ready: "Shard de som encontrado.", t_sent: "Enviado", t_none: "Escolha primeiro um som" }
     }, k, names = [], installed = null, chosen = "";
@@ -776,8 +776,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     function loadSounds() {
       return api("sounds").then(function (d) {
         names = d.sounds; installed = d.available; songs = d.songs || [];
-        showVolume(d.volume); $("tlead").value = d.leadMs; $("tleadv").textContent = d.leadMs + " ms";
-        $("tlatency").textContent = d.latencyMs ? tr("t_delay") + " " + d.latencyMs + " ms" : "";
+        showVolume(d.volume); $("tdelay").value = d.delayMs; $("tdelayv").textContent = d.delayMs + " ms";
         paintSounds(); paintSongs();
       }).catch(function () { /* keep the lists empty */ });
     }
@@ -786,8 +785,8 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
       $(id).addEventListener("input", function () { showVolume(this.value); });
       $(id).addEventListener("change", function () { api("settings", { soundVolume: parseInt(this.value, 10) }).then(function (r) { showVolume(r.settings.soundVolume); }).catch(function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; }); });
     });
-    $("tlead").addEventListener("input", function () { $("tleadv").textContent = this.value + " ms"; });
-    $("tlead").addEventListener("change", function () { api("settings", { soundLeadMs: parseInt(this.value, 10) }).catch(function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; }); });
+    $("tdelay").addEventListener("input", function () { $("tdelayv").textContent = this.value + " ms"; });
+    $("tdelay").addEventListener("change", function () { api("settings", { soundDelayMs: parseInt(this.value, 10) }).catch(function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; }); });
     $("tsongstop").addEventListener("click", function () { act(this, api("play", { song: "stop" })); });
     $("tsend").addEventListener("click", function () {
       if (!chosen) { $("tsmsg").textContent = tr("t_none"); $("tsmsg").className = "msg err"; return; }

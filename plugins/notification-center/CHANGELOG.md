@@ -2,7 +2,7 @@
 
 ## 0.6.0
 - **Volume setting:** `soundVolume` (10-100 %, default 100) replaces the old boost (`soundGain`); a slider next to the sound selector in the send form and in the Testing tab. The `volume` of a request is a share of it.
-- **The sound is in time with the banner:** the Shard measures how long the banner takes on the TV (`latencyMs`) and starts the sound that long after the request, minus `soundLeadMs` (default 800 ms, adjustable in the Testing tab).
+- **The sound is in time with the banner:** `soundDelayMs` (default 3000 ms) is how long after the request the sound starts; tune it by ear in the Testing tab (the banner service cannot tell the Shard when the banner appears). If the banner is recorded in the file the Shard reads, the sound starts as soon as it is seen. `GET sounds` has a `trace` of the last timing.
 - **Goodie** in the Testing tab (`POST play` with `song`): about 10 seconds of a well-known tune made only of the notification sounds (*We Will Rock You*, the start of Beethoven's 5th), recognised by the rhythm. One song at a time, fixed in the code, same fixed command.
 
 ## 0.5.0

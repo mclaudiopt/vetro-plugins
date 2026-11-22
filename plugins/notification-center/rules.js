@@ -117,7 +117,7 @@ function sanitizeSettings(s, old) {
         groupSeconds: has(s, 'groupSeconds') ? clampInt(s.groupSeconds, 0, 3600, 0) : (has(old, 'groupSeconds') ? old.groupSeconds : 60),
         strict: has(s, 'strict') ? s.strict === true : old.strict === true,
         soundVolume: has(s, 'soundVolume') ? clampInt(s.soundVolume, 10, 100, has(old, 'soundVolume') ? clampInt(old.soundVolume, 10, 100, 100) : 100) : (has(old, 'soundVolume') ? clampInt(old.soundVolume, 10, 100, 100) : 100),
-        soundLeadMs: has(s, 'soundLeadMs') ? clampInt(s.soundLeadMs, 0, 2000, has(old, 'soundLeadMs') ? clampInt(old.soundLeadMs, 0, 2000, 800) : 800) : (has(old, 'soundLeadMs') ? clampInt(old.soundLeadMs, 0, 2000, 800) : 800)
+        soundDelayMs: has(s, 'soundDelayMs') ? clampInt(s.soundDelayMs, 0, 10000, has(old, 'soundDelayMs') ? clampInt(old.soundDelayMs, 0, 10000, 3000) : 3000) : (has(old, 'soundDelayMs') ? clampInt(old.soundDelayMs, 0, 10000, 3000) : 3000)
     };
 }
 function defaultSettings() { return sanitizeSettings({}, {}); }

@@ -83,7 +83,7 @@ test('every command ever run has exactly the fixed shape, whatever the request s
     const hostile = [500, 3, -1, 1e15, 'abc', '80; reboot', '$(id)', {toString: 1}, [1], null, true, NaN, '  60  ', 12.7];
     for (const sound of Object.keys(rules.SOUNDS)) for (const volume of hostile) await call(s, 'POST', 'notify', {message: sound + String(Math.random()), sound, volume});
     for (const volume of hostile) await call(s, 'POST', 'play', {sound: 'chime', volume});
-    await call(s, 'POST', 'settings', {soundVolume: '300; reboot', soundLeadMs: {toString: 1}});
+    await call(s, 'POST', 'settings', {soundVolume: '300; reboot', soundDelayMs: {toString: 1}});
     await call(s, 'POST', 'settings', {soundVolume: {toString: 1}});
     await wait(100);
     assert.ok(commands.length > 100, 'many sounds were played: ' + commands.length);
@@ -194,7 +194,7 @@ test('GET sounds lists the closed list and the volume settings; status says soun
         assert.deepEqual(r.json.sounds, ['chime', 'soft', 'reward', 'success', 'alert', 'rotation', 'open', 'poweron']);
         assert.equal(r.json.available, true);
         assert.equal(r.json.volume, 100);
-        assert.equal(r.json.leadMs, 800);
+        assert.equal(r.json.delayMs, 3000);
         assert.equal((await call(s, 'GET', 'status')).json.sound, true);
     });
     await withShard(async (s) => {
@@ -274,37 +274,37 @@ test('a notification that is only queued (open:false) plays its sound at once, a
     assert.equal(s.commands.length, 0, 'stop() cancelled the pending sound');
 });
 
-test('the Shard learns how long the banner takes and starts the sound ahead of it', async () => {
-    const seenFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'nc-lat-')), 'seen.json');
+test('the sound starts soundDelayMs after the request (the Shard cannot see the banner), or as soon as the banner is seen', async () => {
+    const seenFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'nc-delay-')), 'seen.json');
     await withShard(async (s, commands) => {
-        await call(s, 'POST', 'settings', {soundLeadMs: 200});
-        // first banner: the Shard does not know the delay yet (default 2.5 s), the banner is recorded after 600 ms: the sound plays when it is seen
-        const a = await call(s, 'POST', 'notify', {message: 'first banner', sound: 'chime'});
+        await call(s, 'POST', 'settings', {soundDelayMs: 700});
+        await call(s, 'POST', 'notify', {message: 'timed', sound: 'chime'});
+        await wait(400);
+        assert.equal(commands.length, 0, 'not yet');
         await wait(600);
-        fs.writeFileSync(seenFile, JSON.stringify({[a.json.id]: 1}));
+        assert.equal(commands.length, 1, 'started after the delay');
+        const trace = (await call(s, 'GET', 'sounds')).json.trace;
+        assert.equal(trace.plannedMs, 700);
+        assert.ok(trace.startedMs >= 650 && trace.startedMs < 1100, 'started at ' + trace.startedMs);
+        assert.equal(trace.seenMs, null, 'the banner was never seen');
+        // a banner that is seen before the delay starts its sound at once
+        await call(s, 'POST', 'settings', {soundDelayMs: 3000});
+        const b = await call(s, 'POST', 'notify', {message: 'seen early', sound: 'reward'});
         await wait(300);
         assert.equal(commands.length, 1);
-        const learned = (await call(s, 'GET', 'sounds')).json.latencyMs;
-        assert.ok(learned >= 550 && learned <= 900, 'learned ' + learned + ' ms');
-        // second banner: the sound starts about (learned - 200) ms after the request, BEFORE the banner is recorded (at 900 ms)
-        const b = await call(s, 'POST', 'notify', {message: 'second banner', sound: 'reward'});
-        const t0 = Date.now();
-        await wait(learned - 200 - 250);
-        assert.equal(commands.length, 1, 'not yet, at ' + (Date.now() - t0) + ' ms');
-        await wait(450);
-        assert.equal(commands.length, 2, 'the sound started before the banner was recorded');
-        assert.match(commands[1], /vi_reward\.wav$/);
-        fs.writeFileSync(seenFile, JSON.stringify({[a.json.id]: 1, [b.json.id]: 1}));
-        await wait(150);
-        assert.equal(commands.length, 2, 'played once only');
-    }, {waitMs: 5000, seenFile, gapMs: 0});
+        fs.writeFileSync(seenFile, JSON.stringify({[b.json.id]: 1}));
+        await wait(300);
+        assert.equal(commands.length, 2, 'played when the banner was seen');
+        assert.ok((await call(s, 'GET', 'sounds')).json.trace.seenMs < 800);
+    }, {waitMs: 10000, seenFile, gapMs: 0});
 });
 
-test('the lead (soundLeadMs) is a setting, 0-2000 ms, default 800', () => withShard(async (s) => {
-    assert.equal((await call(s, 'GET', 'settings')).json.settings.soundLeadMs, 800);
-    assert.equal((await call(s, 'POST', 'settings', {soundLeadMs: 300})).json.settings.soundLeadMs, 300);
-    assert.equal((await call(s, 'POST', 'settings', {soundLeadMs: 99999})).json.settings.soundLeadMs, 2000);
-    assert.equal((await call(s, 'POST', 'settings', {soundLeadMs: 'x'})).json.settings.soundLeadMs, 2000, 'an invalid value keeps the current one');
+test('the delay (soundDelayMs) is a setting, 0-10000 ms, default 3000', () => withShard(async (s) => {
+    assert.equal((await call(s, 'GET', 'settings')).json.settings.soundDelayMs, 3000);
+    assert.equal((await call(s, 'GET', 'sounds')).json.delayMs, 3000);
+    assert.equal((await call(s, 'POST', 'settings', {soundDelayMs: 1500})).json.settings.soundDelayMs, 1500);
+    assert.equal((await call(s, 'POST', 'settings', {soundDelayMs: 99999})).json.settings.soundDelayMs, 10000);
+    assert.equal((await call(s, 'POST', 'settings', {soundDelayMs: 'x'})).json.settings.soundDelayMs, 10000, 'an invalid value keeps the current one');
 }));
 
 test('goodie: a 10-second tune made only of the notification sounds', () => withShard(async (s, commands) => {

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+- **Sounds:** any app can choose one of the TV's system sounds with `sound` (and `volume`) on `notify`, ntfy, webhooks and source defaults. The sound is played by the separate notification-sound Shard; without it the notification still shows. No sound unless one is asked for, and none for a notification held back by quiet hours or merged as a repeat. Routes `GET sounds` and `POST play`; `GET status` reports `sound`.
+- Panel: new **Testing** tab (test banner/card/both, the API "Try it" form and sound tests); a sound selector in the send form and in the source and webhook forms.
+- Tests with a fake Vetro for all of the above (`tests/notification-center-sound.test.cjs`).
+
 ## 0.3.1
 Fixes from the catalog review.
 - A request can no longer make the Shard fail: every value from the network is type-checked before it is converted (`{"message":{"toString":1}}` and similar threw), every body handler and the router catch errors, names are looked up with `hasOwnProperty` (`__proto__` and `constructor` are not levels, modes or sources).

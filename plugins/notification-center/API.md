@@ -36,8 +36,10 @@ JSON body. Only `message` is required.
 | `seconds` | integer 5-300 | `30` | How long it may wait in the queue (always at least `duration` + 20). |
 | `open` | boolean | `true` | `false` only queues it, without launching the app or its service. |
 | `source` | string, max 32 (`a-z 0-9 . _ -`) | none | Who is sending (or the header `X-NC-Source`). If a source with that name exists, its defaults, key, on/off switch and rate limit apply, see "Sources". |
+| `sound` | `chime` `soft` `reward` `success` `alert` `rotation` `open` `poweron` | none | Plays that TV system sound with the notification. Needs the notification-sound Shard on the TV (without it the sound is ignored and the notification still shows). Not played for a notification held back by quiet hours or merged as a repeat. |
+| `volume` | integer 10-100 | `100` | Volume of the sound, in percent. |
 
-Answer: `{"ok":true,"id":"1-abc","open":"requested"}`. Errors: `400 {"error":"message is required"}` or `"invalid JSON"`; `403` (`invalid key for this source`, `source is disabled`, `unknown source`); `429` (`rate limit for this source`).
+Answer: `{"ok":true,"id":"1-abc","open":"requested","sound":"none"}` (`sound` is `"requested"` when a sound was asked for). Errors: `400 {"error":"message is required"}` or `"invalid JSON"`; `403` (`invalid key for this source`, `source is disabled`, `unknown source`); `429` (`rate limit for this source`).
 Two other answers are still `200`: during quiet hours `{"ok":true,"id":"...","suppressed":"quiet hours"}` (recorded in `GET recent`, not shown), and a repeat inside the grouping window `{"ok":true,"id":"...","merged":true,"count":2}`.
 
 Notes:
@@ -100,6 +102,8 @@ For apps that already publish to ntfy. The body is the message; headers `Title`,
 curl -X POST http://<TV-IP>:8099/plugins/notification-center/api/ntfy -H "Title: Oven" -H "Priority: 4" -H "Tags: tada" -d "Dinner is ready"
 ```
 
+A sound can be chosen with the header `Sound` (or the JSON field `sound`, and `volume`), see `sound` above.
+
 ## Read and discover
 
 | Route | Returns |
@@ -110,6 +114,8 @@ curl -X POST http://<TV-IP>:8099/plugins/notification-center/api/ntfy -H "Title:
 | `GET img?id=<id>[&kind=wallpaper][&info=1]` | The picture of a queued notification; `info=1` returns `{ok,type,bytes}` or `{ok:false,error}` (use it to check a URL). |
 | `GET status` | `{version, app, appVersion, service, handoff, pairing:"on"\|"off"\|"unknown"}`: is the companion app and its banner service installed, is Vetro pairing on, did the Shard write the queue file the banner service reads (`handoff`). |
 | `GET lang` / `POST lang` | Display language `{lang:"en"|"pt"}`, shared by the panel and the TV screen. |
+| `GET sounds` | `{sounds:[...], installed, last}`: the sounds a request can choose, whether the notification-sound Shard answers, and the result of the last attempt to play. |
+| `POST play` | `{sound, volume?}`: play one sound without a notification (answer `{ok:true,sound:"requested"}`, or `400` for an unknown name). |
 | `GET emoji` | The bundled emoji list (Unicode CLDR, MIT) used by the panel's icon picker. |
 
 ## Sources, quiet hours, grouping and webhooks
@@ -119,7 +125,7 @@ curl -X POST http://<TV-IP>:8099/plugins/notification-center/api/ntfy -H "Title:
 | Route | What it does |
 |---|---|
 | `GET profiles` | `{profiles:{<source>:{enabled,icon,level,mode,duration,rate,hasKey}}, max:20}`. The key is never returned. |
-| `POST profiles` | Create, change or delete one: `{source, icon?, level?, mode?, duration?, rate?, enabled?, key?, genKey?, delete?}`. `icon`, `level`, `mode` and `duration` fill in what the sender leaves out (the sender's own value always wins). `rate` is the most notifications per minute (`0` = no limit). `key` (8-64 characters; `""` clears it) makes the source require the header `X-NC-Key`; `genKey: true` creates a random key and returns it **once**. |
+| `POST profiles` | Create, change or delete one: `{source, icon?, level?, mode?, duration?, sound?, volume?, rate?, enabled?, key?, genKey?, delete?}`. `icon`, `level`, `mode`, `duration`, `sound` and `volume` fill in what the sender leaves out (the sender's own value always wins). `rate` is the most notifications per minute (`0` = no limit). `key` (8-64 characters; `""` clears it) makes the source require the header `X-NC-Key`; `genKey: true` creates a random key and returns it **once**. |
 
 **Settings:**
 
@@ -133,7 +139,7 @@ curl -X POST http://<TV-IP>:8099/plugins/notification-center/api/ntfy -H "Title:
 | Route | What it does |
 |---|---|
 | `GET hooks` | `{hooks:{<name>:{title,message,level,icon,mode,duration,source}}, max:10, base}` |
-| `POST hooks` | Create, change or delete one: `{name, message, title?, level?, icon?, mode?, duration?, source?, delete?}`. `name`: `a-z 0-9 -`, up to 24. The text fields are templates: `{{a.b.0.c}}` is replaced by that value of the posted JSON (a missing value gives an empty string; nothing is ever evaluated). `message` is required. |
+| `POST hooks` | Create, change or delete one: `{name, message, title?, level?, icon?, mode?, duration?, sound?, volume?, source?, delete?}`. `name`: `a-z 0-9 -`, up to 24. The text fields are templates: `{{a.b.0.c}}` is replaced by that value of the posted JSON (a missing value gives an empty string; nothing is ever evaluated). `message` is required. |
 | `POST hook/<name>` | Send any JSON (up to 64 KB) to that hook. A body that is not JSON is available as `{{text}}`. The notification is sent as source `source`, or the hook's name if `source` is empty, so a source's key protects its hook. |
 
 Example, GitHub pushes: `POST hooks` with `{"name":"github","title":"{{repository.name}}","message":"{{pusher.name}} pushed {{head_commit.message}}","icon":"📦"}`, then give GitHub the URL `http://<TV-IP>:8099/plugins/notification-center/api/hook/github`.

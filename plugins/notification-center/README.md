@@ -17,6 +17,8 @@ returns the same description as JSON. Apps that already publish to [ntfy](https:
 rate limit and key (`X-NC-Key`); quiet hours hold back everything below a chosen level; identical repeats are counted instead of shown again; and **webhooks**
 (`POST hook/<name>`) turn any JSON, such as a GitHub or Home Assistant payload, into a notification with `{{path}}` templates.
 
+**Sounds** (optional): a request can ask for one of the TV's system sounds with `sound` (and `volume`). The sound is played by the separate `notification-sound` Shard, which needs `exec` for one fixed command; this Shard only asks it over HTTP on `127.0.0.1:8099` and still shows the notification if that Shard is not installed. The **Testing** tab of the panel has the sound tests.
+
 The panel (tab **Notifications**) is bilingual (English by default, Portuguese optional) and has a form, a request generator, an API explorer, an icon
 picker (emoji list bundled in `emoji.json`: Unicode CLDR data from [emojibase-data](https://github.com/milesj/emojibase), MIT, no network) and an
 installation status card.

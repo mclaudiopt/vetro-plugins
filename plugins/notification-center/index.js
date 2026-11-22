@@ -24,6 +24,10 @@ var MIN_DURATION = 1, MAX_DURATION = 60, DEFAULT_DURATION = 8;
 var MODES = { both: 1, banner: 1, full: 1 };   // banner (default) = native banner over the running app, from the background service; full = full-screen card; both = card + banner
 
 module.exports = function (ctx) {
+    // Where Vetro listens. Only a test passes ctx.vetro; on the TV it is always 127.0.0.1:8099.
+    var vetro = ctx.vetro && typeof ctx.vetro === 'object' ? ctx.vetro : {};
+    var VHOST = typeof vetro.host === 'string' ? vetro.host : '127.0.0.1', VPORT = typeof vetro.port === 'number' ? vetro.port : 8099;
+    var SOUND_PATH = '/plugins/notification-sound/api/', soundLast = null;
     var queue = [];      // active notifications (memory only)
     var recent = [];     // last ones sent, for the page; kept in ctx.config so they survive a restart or an update
     try { var saved = (ctx.config.get() || {}).recent; if (Array.isArray(saved)) { recent = saved.slice(0, MAX_RECENT); } } catch (e) { recent = []; }
@@ -76,6 +80,7 @@ module.exports = function (ctx) {
     var limiter = rules.makeLimiter(), groups = {};   // per-source rate windows and recently seen repeats (memory only)
     var str = rules.str, num = rules.num, has = rules.has;
     function cfgGet() { return ctx.config.get() || {}; }
+    function soundVolume(v) { var n = num(v); return n >= 10 ? (n > 100 ? 100 : n) : 0; }
     function settingsNow() { return rules.sanitizeSettings(cfgGet().settings, {}); }
     function clean(text, max) {
         return str(text).replace(/[\x00-\x1f]/g, ' ').slice(0, max).trim();
@@ -102,7 +107,7 @@ module.exports = function (ctx) {
         var body = JSON.stringify({ appId: service ? SERVICE_APP : appId() });
         try {
             var rq = http.request({
-                host: '127.0.0.1', port: 8099, path: '/apps/launch', method: 'POST', timeout: 5000,
+                host: VHOST, port: VPORT, path: '/apps/launch', method: 'POST', timeout: 5000,
                 headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
             }, function (r) { r.resume(); });
             rq.on('error', function () { /* Vetro busy or app not installed */ });
@@ -174,15 +179,43 @@ module.exports = function (ctx) {
         w.forEach(function (x) { try { x.cb('stopped'); } catch (e) { /* ignore */ } });
     }
 
+    // Sound: asks the notification-sound Shard (a separate Shard, which has its own `exec` permission and a fixed list of sounds) to play one of them.
+    // This Shard never runs a command. If that Shard is not installed or answers an error, the notification is still shown.
+    function vetroRequest(method, p, obj, cb) {
+        var body = obj ? JSON.stringify(obj) : null, done = false;
+        function end(e, c) { if (!done) { done = true; cb(e, c); } }
+        try {
+            var headers = body ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } : {};
+            var rq = http.request({ host: VHOST, port: VPORT, path: p, method: method, timeout: 4000, headers: headers }, function (r) {
+                r.resume();
+                r.on('end', function () { end(null, r.statusCode); });
+            });
+            rq.on('error', function (e) { end(e); });
+            rq.setTimeout(4000);
+            rq.on('timeout', function () { rq.destroy(); end(new Error('timeout')); });
+            if (body) { rq.write(body); }
+            rq.end();
+        } catch (e) { end(e); }
+    }
+    function playSound(name, volume) {
+        if (!has(rules.SOUNDS, name)) { return 'none'; }
+        var body = { sound: name };
+        if (volume >= 10 && volume <= 100) { body.volume = volume; }
+        vetroRequest('POST', SOUND_PATH + 'play', body, function (err, code) { soundLast = { at: Date.now(), ok: !err && code === 200, code: err ? 0 : code }; });
+        return 'requested';
+    }
+    function soundInstalled(cb) { vetroRequest('GET', SOUND_PATH + 'state', null, function (err, code) { cb(!err && code === 200); }); }
+
     // Installation status for the panel: is the companion app (and its service) installed, is Vetro pairing on, which Shard version.
     function statusInfo(cb) {
-        var out = { version: '', app: false, appVersion: '', service: false, pairing: 'unknown', handoff: false }, left = 2;
+        var out = { version: '', app: false, appVersion: '', service: false, pairing: 'unknown', handoff: false, sound: false }, left = 3;
         try { out.handoff = fs.existsSync(QUEUE_FILE); } catch (e) { /* unknown */ }
         try { out.version = require('./manifest.json').version; } catch (e) { /* manifest not readable */ }
         function once() { var d = false; return function () { if (!d) { d = true; left -= 1; if (!left) { cb(out); } } }; }
-        var d1 = once(), d2 = once();
+        var d1 = once(), d2 = once(), d3 = once();
+        soundInstalled(function (ok) { out.sound = ok; d3(); });
         try {
-            var rq = http.get({ host: '127.0.0.1', port: 8099, path: '/apps', timeout: 5000 }, function (r) {
+            var rq = http.get({ host: VHOST, port: VPORT, path: '/apps', timeout: 5000 }, function (r) {
                 var s = '';
                 r.setEncoding('utf8');
                 r.on('data', function (d) { s += d; if (s.length > 3000000) { r.destroy(); } });
@@ -245,7 +278,7 @@ module.exports = function (ctx) {
             name: 'notification-center', version: ver, apiVersion: 1,
             base: '/plugins/notification-center/api/',
             auth: 'Same as the rest of Vetro: no key with pairing off; with pairing on, other devices send "Authorization: Bearer <key>". Shards on the same TV call http://127.0.0.1:8099 and need no key.',
-            enums: { level: Object.keys(LEVELS), mode: Object.keys(MODES) },
+            enums: { level: Object.keys(LEVELS), mode: Object.keys(MODES), sound: Object.keys(rules.SOUNDS) },
             limits: { title: MAX_TITLE, message: MAX_MESSAGE, queue: MAX_QUEUE, recent: MAX_RECENT, durationSeconds: [MIN_DURATION, MAX_DURATION], queueSeconds: [MIN_SECONDS, MAX_SECONDS], image: '3 MB, png/jpeg/gif/webp/bmp, http(s) URL up to 290 characters', relaunchAfterSeconds: MIN_RELAUNCH_MS / 1000 },
             fields: {
                 message: { type: 'string', required: true, max: MAX_MESSAGE, note: 'The text of the notification.' },
@@ -258,15 +291,17 @@ module.exports = function (ctx) {
                 wallpaper: { type: 'url', note: 'http/https full-screen background behind the card. The Shard fetches it.' },
                 seconds: { type: 'integer', min: MIN_SECONDS, max: MAX_SECONDS, default: DEFAULT_SECONDS, note: 'How long it waits in the queue (always at least duration + 20).' },
                 open: { type: 'boolean', default: true, note: 'false only queues it, without launching the app or its service.' },
+                sound: { type: 'string', enum: Object.keys(rules.SOUNDS), note: 'Plays one of the TV system sounds with the notification (needs the notification-sound Shard). Empty = no sound. Not played for a notification held back by quiet hours or merged as a repeat.' },
+                volume: { type: 'integer', min: 10, max: 100, default: 100, note: 'Volume of the sound, in percent.' },
                 source: { type: 'string', max: 32, note: 'Who is sending (a-z, 0-9, . _ -), or the header X-NC-Source. If a profile with that name exists, its icon, level, mode and duration fill in what you leave out, and its key (header X-NC-Key), enabled flag and rate limit apply.' }
             },
             endpoints: [
-                { method: 'POST', path: 'notify', summary: 'Send a notification (JSON body with the fields above). With quiet hours it may answer {ok, id, suppressed}; a repeat inside the grouping window answers {ok, id, merged:true, count}.', returns: '{ok, id, open}' },
+                { method: 'POST', path: 'notify', summary: 'Send a notification (JSON body with the fields above). With quiet hours it may answer {ok, id, suppressed}; a repeat inside the grouping window answers {ok, id, merged:true, count}.', returns: '{ok, id, open, sound}' },
                 { method: 'POST', path: 'ntfy', summary: 'ntfy-compatible publish: body = message; headers Title, Priority (5 alert, 4 warning), Tags; or JSON {message,title,priority,tags}.', returns: '{ok, id, open}' },
                 { method: 'GET', path: 'notifications', summary: 'The active queue (used by the app and its service); add ?js=1 for the script form.', returns: '{lang, notifications:[...]}' },
                 { method: 'GET', path: 'recent', summary: 'The last notifications sent.', returns: '{recent:[...]}' },
                 { method: 'GET', path: 'img?id=<id>[&kind=wallpaper][&info=1]', summary: 'The picture of a queued notification, fetched and served by the Shard; info=1 returns {ok,type,bytes}.', returns: 'image bytes or JSON' },
-                { method: 'GET', path: 'status', summary: 'Installation status: companion app, its service, Vetro pairing, Shard version.', returns: '{version, app, appVersion, service, pairing}' },
+                { method: 'GET', path: 'status', summary: 'Installation status: companion app, its service, Vetro pairing, Shard version.', returns: '{version, app, appVersion, service, pairing, sound}' },
                 { method: 'GET', path: 'lang', summary: 'Display language (en or pt).', returns: '{lang}' },
                 { method: 'POST', path: 'lang', summary: 'Set the display language.', body: '{lang: "en"|"pt"}', returns: '{lang}' },
                 { method: 'GET', path: 'profiles', summary: 'The sources (profiles): defaults per sender. Keys are never returned, only hasKey.', returns: '{profiles:{<source>:{enabled,icon,level,mode,duration,rate,hasKey}}, max}' },
@@ -276,6 +311,8 @@ module.exports = function (ctx) {
                 { method: 'GET', path: 'hooks', summary: 'The webhooks (templates that turn any JSON into a notification).', returns: '{hooks, max, base}' },
                 { method: 'POST', path: 'hooks', summary: 'Create, change or delete a webhook.', body: '{name, message (template), title?, level?, icon?, mode?, duration?, source?, delete?}; templates use {{a.b.0.c}} from the posted JSON', returns: '{ok, name, hook, url}' },
                 { method: 'POST', path: 'hook/<name>', summary: 'Send any JSON (up to 64 KB) to a webhook; its templates build the notification. Non-JSON bodies are available as {{text}}.', returns: 'same as notify' },
+                { method: 'POST', path: 'play', summary: 'Play one of the sounds without a notification (needs the notification-sound Shard).', body: '{sound, volume?}', returns: '{ok, sound:"requested"}' },
+                { method: 'GET', path: 'sounds', summary: 'The sounds a request can choose, and whether the notification-sound Shard is installed.', returns: '{sounds:[...], installed, last}' },
                 { method: 'GET', path: 'emoji', summary: 'The bundled emoji list used by the icon picker.', returns: '{source, groups, list}' },
                 { method: 'GET', path: 'api', summary: 'This description.', returns: 'JSON' }
             ],
@@ -344,6 +381,7 @@ module.exports = function (ctx) {
                     break;
                 }
             }
+            b.sound = j ? j.sound : h.sound; b.volume = j ? j.volume : h.volume;
             submit(b, h, res);
         }));
     }
@@ -354,6 +392,17 @@ module.exports = function (ctx) {
             try { b = JSON.parse(raw); } catch (e) { return sendJson(res, 400, { error: 'invalid JSON' }); }
             submit(b, req.headers || {}, res);
         }));
+    }
+
+    // Play a sound without a notification (the panel's sound tests; any app can use it too). Only names from the closed list.
+    function handlePlay(req, res) {
+        readBodyG(req, res, function (raw) {
+            var b;
+            try { b = JSON.parse(raw); } catch (e) { return sendJson(res, 400, { error: 'invalid JSON' }); }
+            b = rules.isObj(b) ? b : {};
+            if (!has(rules.SOUNDS, b.sound)) { return sendJson(res, 400, { error: 'sound must be one of: ' + Object.keys(rules.SOUNDS).join(', ') }); }
+            sendJson(res, 200, { ok: true, sound: playSound(b.sound, soundVolume(b.volume)) });
+        });
     }
 
     // Webhook: POST hook/<name> with any JSON. The hook's templates turn it into a notification ({{a.b}} = that value of the posted JSON).
@@ -405,9 +454,11 @@ module.exports = function (ctx) {
                 mode: has(MODES, b.mode) ? b.mode : 'banner',
                 duration: dur,
                 source: source,
+                sound: has(rules.SOUNDS, b.sound) ? b.sound : '',
+                volume: soundVolume(b.volume),
                 expires: Date.now() + secs * 1000
             };
-            var entry = { id: note.id, title: note.title, message: note.message, level: note.level, mode: note.mode, duration: note.duration, icon: note.icon, image: note.image, wallpaper: note.wallpaper, source: source, at: Date.now() };
+            var entry = { id: note.id, title: note.title, message: note.message, level: note.level, mode: note.mode, duration: note.duration, icon: note.icon, image: note.image, wallpaper: note.wallpaper, source: source, sound: note.sound, volume: note.volume, at: Date.now() };
             // Quiet hours: below the allowed level the notification is only recorded, never shown.
             if (rules.isQuiet(settings, note.level, new Date())) {
                 entry.suppressed = true;
@@ -432,7 +483,9 @@ module.exports = function (ctx) {
             if (recent.length > MAX_RECENT) { recent.pop(); }
             saveRecent();
             var opened = b.open === false ? 'not requested' : openApp(note.mode === 'banner');
-            sendJson(res, 200, { ok: true, id: note.id, open: opened });
+            // The sound is asked for only now: not for a notification held back by quiet hours or merged as a repeat.
+            var soundState = note.sound ? playSound(note.sound, note.volume) : 'none';
+            sendJson(res, 200, { ok: true, id: note.id, open: opened, sound: soundState });
         }
     }
 
@@ -505,6 +558,8 @@ module.exports = function (ctx) {
             if (sub === 'status' && req.method === 'GET') { statusInfo(function (o) { sendJson(res, 200, o); }); return true; }
             if (sub === 'img' && req.method === 'GET') { serveImage(req, res); return true; }
             if (sub === 'ntfy' && req.method === 'POST') { handleNtfy(req, res); return true; }
+            if (sub === 'play' && req.method === 'POST') { handlePlay(req, res); return true; }
+            if (sub === 'sounds' && req.method === 'GET') { soundInstalled(function (ok) { sendJson(res, 200, { sounds: Object.keys(rules.SOUNDS), installed: ok, last: soundLast }); }); return true; }
             if (sub === 'profiles' && (req.method === 'GET' || req.method === 'POST')) { handleProfiles(req, res); return true; }
             if (sub === 'settings' && (req.method === 'GET' || req.method === 'POST')) { handleSettings(req, res); return true; }
             if (sub === 'hooks' && (req.method === 'GET' || req.method === 'POST')) { handleHooks(req, res); return true; }

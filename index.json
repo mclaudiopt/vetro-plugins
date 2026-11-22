@@ -57,13 +57,15 @@
     {
       "id": "notification-center",
       "name": "Notification Center",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "author": "mclaudiopt",
-      "description": "Show LAN notifications as native TV banners via a companion app. Talks to Vetro on 127.0.0.1:8099 and fetches a sender's image/wallpaper URL only if sent.",
-      "permissions": [],
-      "url": "dist/notification-center-0.4.0.vplugin",
-      "sha256": "04fa3b106e9c32fe72ebc10cb67e8b59ba1740e1be9ef285db0f00f1c33a8a1b",
-      "size": 346343
+      "description": "Native TV banners for notifications from any LAN device, with optional sounds. Runs one fixed paplay command; fetches a sender's image URL only if sent.",
+      "permissions": [
+        "exec"
+      ],
+      "url": "dist/notification-center-0.5.0.vplugin",
+      "sha256": "dc075937e4e00ec7065e1ba66c39b5ea8c4c774bb4c66bae1c63fc4631d50436",
+      "size": 350978
     },
     {
       "id": "prometheus",

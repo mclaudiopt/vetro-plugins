@@ -290,6 +290,8 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
           <h3 style="margin-top:22px" data-t="t_sound">Sounds</h3>
           <div class="msg" id="tsoundnote" style="padding:0 0 8px"></div>
           <div class="row" id="tsounds"></div>
+          <div class="lab" style="margin-top:12px" data-t="f_gain">Boost (%, the system sounds are quiet)</div>
+          <div class="row"><input type="range" id="tgain" min="100" max="300" step="10" value="200" style="flex:1"><b id="tgainv">200%</b><button type="button" class="ghost" id="tgsave" data-t="save">Save</button></div>
           <div class="lab" style="margin-top:12px" data-t="f_vol">Volume (%)</div>
           <div class="row"><input type="range" id="tvol" min="10" max="100" step="5" value="100" style="flex:1"><b id="tvolv">100%</b></div>
           <div class="row" style="margin-top:12px"><button type="button" class="send" id="tsend" data-t="t_send_sound">Send a notification with this sound</button></div>
@@ -722,17 +724,17 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     loadSources(); loadSettings(); loadHooks();
   })();
 
-  // Sounds: the list comes from the Shard (GET sounds); the notification-sound Shard plays them. Used by the send form, the source and webhook
+  // Sounds: the list comes from the Shard (GET sounds); this Shard plays them with one fixed paplay command. Used by the send form, the source and webhook
   // forms and the Testing tab.
   (function () {
     var X = {
-      en: { test_tab: "Testing", t_show: "Test on the TV", t_show_note: "Each button sends a real test notification to the TV.", t_sound: "Sounds", f_sound: "Sound", f_vol: "Volume (%)", no_sound: "No sound",
-        t_send_sound: "Send a notification with this sound", t_pick: "Pick a sound, then press Send. Tapping a sound also plays it.", t_missing: "The notification-sound Shard is not installed: sounds are ignored until it is.",
+      en: { test_tab: "Testing", t_show: "Test on the TV", t_show_note: "Each button sends a real test notification to the TV.", t_sound: "Sounds", f_gain: "Boost (%, the system sounds are quiet)", f_sound: "Sound", f_vol: "Volume (%)", no_sound: "No sound",
+        t_send_sound: "Send a notification with this sound", t_pick: "Tapping a sound plays it. Then press Send to try it in a notification.", t_missing: "This Shard cannot play sounds (the exec permission was not granted).",
         t_ready: "Sound Shard found.", t_sent: "Sent", t_none: "Pick a sound first" },
-      pt: { test_tab: "Testes", t_show: "Testar na TV", t_show_note: "Cada botão envia uma notificação de teste real para a TV.", t_sound: "Sons", f_sound: "Som", f_vol: "Volume (%)", no_sound: "Sem som",
-        t_send_sound: "Enviar uma notificação com este som", t_pick: "Escolha um som e carregue em Enviar. Tocar num som também o reproduz.", t_missing: "O Shard notification-sound não está instalado: os sons são ignorados até estar.",
+      pt: { test_tab: "Testes", t_show: "Testar na TV", t_show_note: "Cada botão envia uma notificação de teste real para a TV.", t_sound: "Sons", f_gain: "Reforço (%, os sons do sistema são baixos)", f_sound: "Som", f_vol: "Volume (%)", no_sound: "Sem som",
+        t_send_sound: "Enviar uma notificação com este som", t_pick: "Escolha um som e carregue em Enviar. Tocar num som também o reproduz.", t_missing: "Este Shard não pode tocar sons (a permissão exec não foi concedida).",
         t_ready: "Shard de som encontrado.", t_sent: "Enviado", t_none: "Escolha primeiro um som" }
-    }, k, names = [], installed = null, chosen = "";
+    }, k, names = [], installed = null, chosen = "", gain = 200;
     for (k in X.en) { T.en[k] = X.en[k]; }
     for (k in X.pt) { T.pt[k] = X.pt[k]; }
     function options(current) {
@@ -752,9 +754,13 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
       }
     }
     function loadSounds() {
-      return api("sounds").then(function (d) { names = d.sounds; installed = d.installed; paintSounds(); }).catch(function () { /* keep the lists empty */ });
+      return api("sounds").then(function (d) { names = d.sounds; installed = d.available; gain = d.gain || 200; $("tgain").value = gain; $("tgainv").textContent = gain + "%"; paintSounds(); }).catch(function () { /* keep the lists empty */ });
     }
     $("tvol").addEventListener("input", function () { $("tvolv").textContent = this.value + "%"; });
+    $("tgain").addEventListener("input", function () { $("tgainv").textContent = this.value + "%"; });
+    $("tgsave").addEventListener("click", function () {
+      act(this, api("settings", { soundGain: parseInt($("tgain").value, 10) }).then(function (r) { gain = r.settings.soundGain; $("tsmsg").textContent = tr("saved"); $("tsmsg").className = "msg ok"; }, function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; throw e; }));
+    });
     $("tsend").addEventListener("click", function () {
       if (!chosen) { $("tsmsg").textContent = tr("t_none"); $("tsmsg").className = "msg err"; return; }
       act(this, api("notify", { title: "Sound test", message: "Sound: " + chosen, level: "info", mode: "banner", duration: 6, sound: chosen, volume: parseInt($("tvol").value, 10) })

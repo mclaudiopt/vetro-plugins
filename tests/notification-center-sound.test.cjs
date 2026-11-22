@@ -1,43 +1,37 @@
 'use strict';
-// The sound field: a notification can ask for one of the notification-sound Shard's sounds. A fake Vetro records what the Shard asks it to do.
+// Sounds: a notification can ask for one of the TV's system sounds. The Shard has `exec` for exactly one command shape; a fake ctx.execute records
+// every command, so these tests also prove that nothing from a request can reach it.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
+const fs = require('fs'), os = require('os'), path = require('path');
 const {EventEmitter} = require('events');
 
 const folder = path.join(__dirname, '../plugins/notification-center');
 const create = require(path.join(folder, 'index.js'));
 const rules = require(path.join(folder, 'rules.js'));
+const manifest = JSON.parse(fs.readFileSync(path.join(folder, 'manifest.json'), 'utf8'));
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+const SHAPE = /^paplay --volume=\d{1,6} \/usr\/share\/feedback\/sound\/operation\/[a-z_]+\.wav$/;
+const DIR = '/usr/share/feedback/sound/operation/';
 
-// Vetro stand-in: records /apps/launch and sound calls; `installed` decides whether the sound Shard answers.
-async function fakeVetro(options = {}) {
-    const log = {plays: [], launches: [], states: 0};
-    const server = http.createServer((req, res) => {
-        let body = '';
-        req.on('data', d => { body += d; });
-        req.on('end', () => {
-            if (req.url === '/apps/launch') { log.launches.push(JSON.parse(body || '{}').appId); res.writeHead(200); return res.end('{}'); }
-            if (req.url === '/plugins/notification-sound/api/state') { log.states += 1; res.writeHead(options.installed === false ? 404 : 200); return res.end('{}'); }
-            if (req.url === '/plugins/notification-sound/api/play') {
-                log.plays.push(JSON.parse(body || '{}'));
-                res.writeHead(options.playStatus || 200); return res.end('{"ok":true}');
-            }
-            res.writeHead(404); res.end('{}');
-        });
-    });
-    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-    return {log, port: server.address().port, close: () => new Promise(resolve => server.close(resolve))};
-}
-function start(port, seed) {
-    let config = seed || {};
-    const shard = create({
+function start(options = {}) {
+    let config = options.seed || {};
+    const commands = [];
+    const ctx = {
         id: 'notification-center', dir: fs.mkdtempSync(path.join(os.tmpdir(), 'nc-sound-')),
         config: {get: () => JSON.parse(JSON.stringify(config)), set: v => { config = JSON.parse(JSON.stringify(v)); }},
-        execute: () => Promise.reject(new Error('no exec')), vetro: {host: '127.0.0.1', port}
-    });
+        sound: {gapMs: options.gapMs === undefined ? 0 : options.gapMs}
+    };
+    if (options.execute !== null) {
+        ctx.execute = cmd => {
+            commands.push(cmd);
+            if (options.execute) return options.execute(cmd);
+            return Promise.resolve({exit_code: 0, stdout: '', stderr: ''});
+        };
+    }
+    const shard = create(ctx);
     if (shard.start) shard.start();
-    return shard;
+    return {shard, commands};
 }
 function call(shard, method, sub, body, headers) {
     return new Promise((resolve, reject) => {
@@ -48,66 +42,93 @@ function call(shard, method, sub, body, headers) {
         setImmediate(() => { if (body != null) req.emit('data', Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))); req.emit('end'); });
     });
 }
-async function withShard(fn, options, seed) {
-    const vetro = await fakeVetro(options), shard = start(vetro.port, seed);
-    try { await fn(shard, vetro.log); } finally { if (shard.stop) shard.stop(); await vetro.close(); }
+async function withShard(fn, options) {
+    const s = start(options);
+    try { await fn(s.shard, s.commands); } finally { if (s.shard.stop) s.shard.stop(); }
 }
+const vol = (percent, gain = 200) => Math.round(65536 * percent / 100 * gain / 100);
 
-test('a notification with a sound asks the sound Shard to play it, with the volume', () => withShard(async (s, log) => {
+test('the manifest asks for exec, and only the sound command uses it', () => {
+    assert.deepEqual(manifest.permissions, ['exec']);
+});
+
+test('a notification with a sound runs the one fixed command, with the volume and the boost', () => withShard(async (s, commands) => {
     const r = await call(s, 'POST', 'notify', {title: 'Goal', message: 'Sporting 1-0', sound: 'reward', volume: 80});
     assert.equal(r.code, 200);
     assert.equal(r.json.sound, 'requested');
-    await wait(150);
-    assert.deepEqual(log.plays, [{sound: 'reward', volume: 80}]);
-    assert.deepEqual(log.launches, ['NotifCtr01.Svc'], 'the banner is still requested');
+    await wait(50);
+    assert.deepEqual(commands, ['paplay --volume=' + vol(80) + ' ' + DIR + 'vi_reward.wav']);
 }));
 
-test('without a sound nothing is played (the default is silence)', () => withShard(async (s, log) => {
+test('without a sound nothing is run (the default is silence)', () => withShard(async (s, commands) => {
     const r = await call(s, 'POST', 'notify', {message: 'quiet one'});
     assert.equal(r.json.sound, 'none');
-    await wait(150);
-    assert.deepEqual(log.plays, []);
+    await wait(50);
+    assert.deepEqual(commands, []);
 }));
 
-test('only names from the closed list are accepted; anything else is ignored', () => withShard(async (s, log) => {
-    for (const bad of ['../../etc/passwd', 'Chime', '__proto__', 'constructor', {toString: 1}, ['chime'], 5, '']) {
+test('only names from the closed list are accepted; anything else is ignored and never reaches the command', () => withShard(async (s, commands) => {
+    for (const bad of ['../../etc/passwd', 'Chime', '__proto__', 'constructor', 'chime; reboot', 'chime $(id)', {toString: 1}, ['chime'], 5, '', null]) {
         const r = await call(s, 'POST', 'notify', {message: 'x' + Math.random(), sound: bad});
         assert.equal(r.code, 200);
         assert.equal(r.json.sound, 'none', JSON.stringify(bad));
+        assert.equal((await call(s, 'POST', 'play', {sound: bad})).code, 400, 'play ' + JSON.stringify(bad));
     }
-    await wait(150);
-    assert.deepEqual(log.plays, []);
+    await wait(50);
+    assert.deepEqual(commands, []);
 }));
 
-test('the volume is clamped to 10-100 and left out when invalid', () => withShard(async (s, log) => {
-    await call(s, 'POST', 'notify', {message: 'a', sound: 'chime', volume: 500});
-    await call(s, 'POST', 'notify', {message: 'b', sound: 'chime', volume: 3});
-    await call(s, 'POST', 'notify', {message: 'c', sound: 'chime', volume: {toString: 1}});
-    await wait(200);
-    assert.deepEqual(log.plays.map(p => p.volume), [100, undefined, undefined]);
+test('every command ever run has exactly the fixed shape, whatever the request sends', () => withShard(async (s, commands) => {
+    const hostile = [500, 3, -1, 1e15, 'abc', '80; reboot', '$(id)', {toString: 1}, [1], null, true, NaN, '  60  ', 12.7];
+    for (const sound of Object.keys(rules.SOUNDS)) for (const volume of hostile) await call(s, 'POST', 'notify', {message: sound + String(Math.random()), sound, volume});
+    for (const volume of hostile) await call(s, 'POST', 'play', {sound: 'chime', volume});
+    await call(s, 'POST', 'settings', {soundGain: '300; reboot'});
+    await call(s, 'POST', 'settings', {soundGain: {toString: 1}});
+    await wait(100);
+    assert.ok(commands.length > 100, 'many sounds were played: ' + commands.length);
+    for (const c of commands) assert.match(c, SHAPE);
 }));
 
-test('a source can have a default sound and volume, and the request can still choose another', () => withShard(async (s, log) => {
+test('the volume is clamped to 10-100 and defaults to 100', () => withShard(async (s, commands) => {
+    for (const volume of [500, 3, {toString: 1}, 50]) await call(s, 'POST', 'notify', {message: 'v' + String(Math.random()), sound: 'chime', volume});
+    await wait(80);
+    assert.deepEqual(commands.map(c => Number(/--volume=(\d+)/.exec(c)[1])), [vol(100), vol(100), vol(100), vol(50)]);
+}));
+
+test('the boost (soundGain) is a setting, 100-300 %, default 200', () => withShard(async (s, commands) => {
+    assert.equal((await call(s, 'GET', 'settings')).json.settings.soundGain, 200);
+    assert.equal((await call(s, 'POST', 'settings', {soundGain: 300})).json.settings.soundGain, 300);
+    assert.equal((await call(s, 'POST', 'settings', {soundGain: 1000})).json.settings.soundGain, 300);
+    assert.equal((await call(s, 'POST', 'settings', {soundGain: 50})).json.settings.soundGain, 100);
+    assert.equal((await call(s, 'POST', 'settings', {soundGain: 'x'})).json.settings.soundGain, 100, 'an invalid value keeps the current one');
+    await call(s, 'POST', 'settings', {soundGain: 300});
+    assert.equal((await call(s, 'POST', 'settings', {strict: false})).json.settings.soundGain, 300, 'other settings keep it');
+    await call(s, 'POST', 'notify', {message: 'loud', sound: 'alert'});
+    await wait(50);
+    assert.deepEqual(commands, ['paplay --volume=' + vol(100, 300) + ' ' + DIR + 'vi_fail.wav']);
+}));
+
+test('a source can have a default sound and volume, and the request can still choose another', () => withShard(async (s, commands) => {
     await call(s, 'POST', 'profiles', {source: 'match-alerts', sound: 'success', volume: 60});
     assert.equal((await call(s, 'GET', 'profiles')).json.profiles['match-alerts'].sound, 'success');
     await call(s, 'POST', 'notify', {message: 'goal', source: 'match-alerts'});
     await call(s, 'POST', 'notify', {message: 'red card', source: 'match-alerts', sound: 'alert', volume: 90});
-    await wait(200);
-    assert.deepEqual(log.plays, [{sound: 'success', volume: 60}, {sound: 'alert', volume: 90}]);
+    await wait(80);
+    assert.deepEqual(commands, ['paplay --volume=' + vol(60) + ' ' + DIR + 'vi_success.wav', 'paplay --volume=' + vol(90) + ' ' + DIR + 'vi_fail.wav']);
     assert.equal((await call(s, 'POST', 'profiles', {source: 'match-alerts', sound: 'nope'})).json.profile.sound, '', 'an unknown sound clears it');
 }));
 
-test('webhooks and ntfy can choose a sound too', () => withShard(async (s, log) => {
+test('webhooks and ntfy can choose a sound too', () => withShard(async (s, commands) => {
     await call(s, 'POST', 'hooks', {name: 'door', message: '{{who}} is at the door', sound: 'open'});
     await call(s, 'POST', 'hook/door', {who: 'Ana'});
     await call(s, 'POST', 'ntfy', 'Backup finished', {sound: 'soft', 'content-type': 'text/plain'});
     await call(s, 'POST', 'ntfy', JSON.stringify({message: 'Disk almost full', sound: 'alert', volume: 70}), {'content-type': 'application/json'});
-    await wait(250);
-    assert.deepEqual(log.plays.map(p => p.sound), ['open', 'soft', 'alert']);
-    assert.equal(log.plays[2].volume, 70);
+    await wait(100);
+    assert.deepEqual(commands.map(c => /operation\/(.+)\.wav/.exec(c)[1]), ['home_open', 'select', 'vi_fail']);
+    assert.equal(Number(/--volume=(\d+)/.exec(commands[2])[1]), vol(70));
 }));
 
-test('no sound for a notification that is not shown: quiet hours, a repeat, a wrong key, a rate limit', () => withShard(async (s, log) => {
+test('no sound for a notification that is not shown: quiet hours, a repeat, a wrong key, a rate limit', () => withShard(async (s, commands) => {
     await call(s, 'POST', 'profiles', {source: 'locked', key: 'secret-key-123'});
     assert.equal((await call(s, 'POST', 'notify', {message: 'no key', source: 'locked', sound: 'chime'})).code, 403);
     await call(s, 'POST', 'profiles', {source: 'slow', rate: 1});
@@ -117,8 +138,8 @@ test('no sound for a notification that is not shown: quiet hours, a repeat, a wr
     const again = await call(s, 'POST', 'notify', {message: 'same', sound: 'chime'});
     assert.equal(again.json.merged, true);
     assert.equal(again.json.sound, undefined);
-    await wait(200);
-    assert.equal(log.plays.length, 1, 'only the first "same" played');
+    await wait(50);
+    assert.equal(commands.length, 1, 'only the first "same" played');
 
     await call(s, 'POST', 'settings', {quiet: {enabled: true, from: '00:00', to: '23:59', allow: 'alert'}});
     if (new Date().getHours() === 23 && new Date().getMinutes() === 59) return;   // the one minute outside the window
@@ -126,9 +147,9 @@ test('no sound for a notification that is not shown: quiet hours, a repeat, a wr
     assert.equal(quiet.json.suppressed, 'quiet hours');
     const loud = await call(s, 'POST', 'notify', {message: 'fire', sound: 'alert', level: 'alert'});
     assert.equal(loud.json.sound, 'requested');
-    await wait(200);
-    assert.equal(log.plays.length, 2);
-    assert.equal(log.plays[1].sound, 'alert');
+    await wait(50);
+    assert.equal(commands.length, 2);
+    assert.match(commands[1], /vi_fail\.wav$/);
 }));
 
 test('Resend keeps the sound: it is stored with the recent notification', () => withShard(async (s) => {
@@ -138,54 +159,67 @@ test('Resend keeps the sound: it is stored with the recent notification', () => 
     assert.equal(rec.volume, 50);
 }));
 
-test('the notification still works when Vetro is down or the sound Shard fails', async () => {
-    const dead = await fakeVetro(); const port = dead.port; await dead.close();
-    const s = start(port);
-    try {
-        const r = await call(s, 'POST', 'notify', {message: 'no Vetro', sound: 'chime'});
-        assert.equal(r.code, 200);
-        assert.equal(r.json.sound, 'requested');
-        assert.equal((await call(s, 'GET', 'status')).code, 200);
-    } finally { if (s.stop) s.stop(); }
-    await withShard(async (sh, log) => {
-        assert.equal((await call(sh, 'POST', 'notify', {message: 'too soon', sound: 'chime'})).code, 200);
-        await wait(150);
-        assert.equal(log.plays.length, 1);
-        const sounds = await call(sh, 'GET', 'sounds');
-        assert.equal(sounds.json.last.ok, false, 'the failure is visible in GET sounds');
-    }, {playStatus: 502});
+test('the notification still works when the command fails, exits with an error or throws', async () => {
+    for (const execute of [
+        () => Promise.reject(new Error('paplay: not found')),
+        () => Promise.resolve({exit_code: 1, stderr: 'no audio'}),
+        () => { throw new Error('exec denied'); },
+        () => 'not a promise'
+    ]) {
+        await withShard(async (s) => {
+            const r = await call(s, 'POST', 'notify', {message: 'still shown', sound: 'chime'});
+            assert.equal(r.code, 200);
+            assert.equal(r.json.sound, 'requested');
+            await wait(50);
+            assert.equal((await call(s, 'GET', 'sounds')).json.last.ok, false, 'the failure is visible in GET sounds');
+            assert.equal((await call(s, 'GET', 'notifications')).json.notifications.length, 1);
+        }, {execute});
+    }
 });
 
-test('GET sounds lists the closed list and says whether the sound Shard is installed; status says it too', async () => {
+test('one sound every 0.8 s: faster requests are skipped, not queued', () => withShard(async (s, commands) => {
+    const a = await call(s, 'POST', 'notify', {message: 'a', sound: 'chime'});
+    const b = await call(s, 'POST', 'notify', {message: 'b', sound: 'chime'});
+    assert.equal(a.json.sound, 'requested');
+    assert.equal(b.json.sound, 'skipped');
+    assert.equal((await call(s, 'POST', 'play', {sound: 'chime'})).code, 429);
+    await wait(50);
+    assert.equal(commands.length, 1);
+}, {gapMs: 800}));
+
+test('GET sounds lists the closed list and the boost; status says sounds are available; without exec they are not', async () => {
     await withShard(async (s) => {
         const r = await call(s, 'GET', 'sounds');
         assert.deepEqual(r.json.sounds, ['chime', 'soft', 'reward', 'success', 'alert', 'rotation', 'open', 'poweron']);
-        assert.equal(r.json.installed, true);
+        assert.equal(r.json.available, true);
+        assert.equal(r.json.gain, 200);
         assert.equal((await call(s, 'GET', 'status')).json.sound, true);
     });
     await withShard(async (s) => {
-        assert.equal((await call(s, 'GET', 'sounds')).json.installed, false);
-        assert.equal((await call(s, 'GET', 'status')).json.sound, false);
-    }, {installed: false});
+        assert.equal((await call(s, 'GET', 'sounds')).json.available, false);
+        const r = await call(s, 'POST', 'notify', {message: 'no exec', sound: 'chime'});
+        assert.equal(r.code, 200);
+    }, {execute: null});
 });
 
-test('the list matches the notification-sound Shard (when its folder is next to this repository)', t => {
-    const file = path.join(__dirname, '../../tv-notification-sound/index.js');
-    if (!fs.existsSync(file)) return t.skip('the sound Shard is not checked out here');
-    const m = /var SOUNDS = \{([^}]*)\}/.exec(fs.readFileSync(file, 'utf8'));
-    const names = m[1].split(',').map(x => x.split(':')[0].trim()).filter(Boolean);
-    assert.deepEqual(Object.keys(rules.SOUNDS), names);
-});
-
-test('POST play plays a sound without a notification, and refuses unknown names', () => withShard(async (s, log) => {
+test('POST play plays a sound without a notification, and refuses unknown names', () => withShard(async (s, commands) => {
     const ok = await call(s, 'POST', 'play', {sound: 'poweron', volume: 40});
     assert.equal(ok.code, 200);
     assert.equal(ok.json.sound, 'requested');
-    for (const bad of [{sound: 'nope'}, {sound: '../x'}, {sound: {toString: 1}}, {}, [], null]) {
+    for (const bad of [{sound: 'nope'}, {sound: '../x'}, {sound: {toString: 1}}, [], null]) {
         assert.equal((await call(s, 'POST', 'play', bad)).code, 400, JSON.stringify(bad));
     }
     assert.equal((await call(s, 'POST', 'play', '{not json')).code, 400);
-    await wait(150);
-    assert.deepEqual(log.plays, [{sound: 'poweron', volume: 40}]);
+    await wait(50);
+    assert.deepEqual(commands, ['paplay --volume=' + vol(40) + ' ' + DIR + 'power_on.wav']);
     assert.deepEqual((await call(s, 'GET', 'notifications')).json.notifications, [], 'no notification was queued');
 }));
+
+test('the Shard has no other use of exec: the only command string in the source is the paplay one', () => {
+    const source = fs.readFileSync(path.join(folder, 'index.js'), 'utf8');
+    const calls = source.match(/ctx\.execute\(/g) || [];
+    assert.equal(calls.length, 1);
+    assert.match(source, /ctx\.execute\('paplay --volume=' \+ v \+ ' ' \+ SOUND_DIR \+ SOUND_FILES\[name\]/);
+    assert.deepEqual(Object.keys(rules.SOUNDS), ['chime', 'soft', 'reward', 'success', 'alert', 'rotation', 'open', 'poweron']);
+    assert.ok(!fs.readFileSync(path.join(folder, 'rules.js'), 'utf8').includes('execute'));
+});

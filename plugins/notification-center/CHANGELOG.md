@@ -1,7 +1,13 @@
 # Changelog
 
+## 0.5.0
+- **Sounds are part of this Shard now** (they were a separate notification-sound Shard in 0.4.0, which is no longer needed). The Shard asks for the `exec` permission for exactly one command, `paplay` on a fixed list of the TV's system sounds; the sound is chosen from a closed list and the volume is a clamped integer, so nothing from a request reaches the command. At most one sound every 0.8 s.
+- `sound` and `volume` on `notify`, ntfy, webhooks and source defaults; routes `GET sounds` and `POST play`; the boost is the setting `soundGain` (100-300 %, default 200) in `POST settings`; `GET status` reports `sound`.
+- Panel: the Testing tab has the boost slider next to the sound tests.
+- Tests with a fake `ctx.execute` that records every command and checks its shape.
+
 ## 0.4.0
-- **Sounds:** any app can choose one of the TV's system sounds with `sound` (and `volume`) on `notify`, ntfy, webhooks and source defaults. The sound is played by the separate notification-sound Shard; without it the notification still shows. No sound unless one is asked for, and none for a notification held back by quiet hours or merged as a repeat. Routes `GET sounds` and `POST play`; `GET status` reports `sound`.
+- **Sounds:** any app can choose one of the TV's system sounds with `sound` (and `volume`) on `notify`, ntfy, webhooks and source defaults. In 0.4.0 the sound was played by a separate notification-sound Shard (merged into this one in 0.5.0). No sound unless one is asked for, and none for a notification held back by quiet hours or merged as a repeat. Routes `GET sounds` and `POST play`; `GET status` reports `sound`.
 - Panel: new **Testing** tab (test banner/card/both, the API "Try it" form and sound tests); a sound selector in the send form and in the source and webhook forms.
 - Tests with a fake Vetro for all of the above (`tests/notification-center-sound.test.cjs`).
 

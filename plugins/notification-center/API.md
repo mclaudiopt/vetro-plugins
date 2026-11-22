@@ -36,7 +36,7 @@ JSON body. Only `message` is required.
 | `seconds` | integer 5-300 | `30` | How long it may wait in the queue (always at least `duration` + 20). |
 | `open` | boolean | `true` | `false` only queues it, without launching the app or its service. |
 | `source` | string, max 32 (`a-z 0-9 . _ -`) | none | Who is sending (or the header `X-NC-Source`). If a source with that name exists, its defaults, key, on/off switch and rate limit apply, see "Sources". |
-| `sound` | `chime` `soft` `reward` `success` `alert` `rotation` `open` `poweron` | none | Plays that TV system sound with the notification. Needs the notification-sound Shard on the TV (without it the sound is ignored and the notification still shows). Not played for a notification held back by quiet hours or merged as a repeat. |
+| `sound` | `chime` `soft` `reward` `success` `alert` `rotation` `open` `poweron` | none | Plays that TV system sound with the notification. Played by this Shard itself (one fixed `paplay` command), at most one sound every 0.8 s. Not played for a notification held back by quiet hours or merged as a repeat. |
 | `volume` | integer 10-100 | `100` | Volume of the sound, in percent. |
 
 Answer: `{"ok":true,"id":"1-abc","open":"requested","sound":"none"}` (`sound` is `"requested"` when a sound was asked for). Errors: `400 {"error":"message is required"}` or `"invalid JSON"`; `403` (`invalid key for this source`, `source is disabled`, `unknown source`); `429` (`rate limit for this source`).
@@ -114,8 +114,8 @@ A sound can be chosen with the header `Sound` (or the JSON field `sound`, and `v
 | `GET img?id=<id>[&kind=wallpaper][&info=1]` | The picture of a queued notification; `info=1` returns `{ok,type,bytes}` or `{ok:false,error}` (use it to check a URL). |
 | `GET status` | `{version, app, appVersion, service, handoff, pairing:"on"\|"off"\|"unknown"}`: is the companion app and its banner service installed, is Vetro pairing on, did the Shard write the queue file the banner service reads (`handoff`). |
 | `GET lang` / `POST lang` | Display language `{lang:"en"|"pt"}`, shared by the panel and the TV screen. |
-| `GET sounds` | `{sounds:[...], installed, last}`: the sounds a request can choose, whether the notification-sound Shard answers, and the result of the last attempt to play. |
-| `POST play` | `{sound, volume?}`: play one sound without a notification (answer `{ok:true,sound:"requested"}`, or `400` for an unknown name). |
+| `GET sounds` | `{sounds:[...], available, gain, last}`: the sounds a request can choose, whether this Shard can play them (`exec` granted), the boost in percent (`soundGain`) and the result of the last attempt. |
+| `POST play` | `{sound, volume?}`: play one sound without a notification (answer `{ok:true,sound:"requested"}`, `400` for an unknown name, `429` if another sound was played less than 0.8 s ago). |
 | `GET emoji` | The bundled emoji list (Unicode CLDR, MIT) used by the panel's icon picker. |
 
 ## Sources, quiet hours, grouping and webhooks
@@ -131,8 +131,8 @@ A sound can be chosen with the header `Sound` (or the JSON field `sound`, and `v
 
 | Route | What it does |
 |---|---|
-| `GET settings` | `{settings:{quiet:{enabled,from,to,allow},groupSeconds,strict}}` |
-| `POST settings` | Send only what changes. `quiet`: between `from` and `to` (`"22:00"` to `"07:00"`, TV local time, may cross midnight) nothing is shown below the level `allow` (`alert` lets only alerts through, `warn` lets warnings and alerts, `none` silences everything); suppressed ones are still listed in `GET recent`. `groupSeconds` (0-3600, default 60, `0` = off): a notification identical to one from the last `groupSeconds` (same source, title, message and level) is counted (`count` in `GET recent`) instead of shown again. `strict: true` rejects notifications whose `source` has no profile. |
+| `GET settings` | `{settings:{quiet:{enabled,from,to,allow},groupSeconds,strict,soundGain}}` |
+| `POST settings` | Send only what changes. `quiet`: between `from` and `to` (`"22:00"` to `"07:00"`, TV local time, may cross midnight) nothing is shown below the level `allow` (`alert` lets only alerts through, `warn` lets warnings and alerts, `none` silences everything); suppressed ones are still listed in `GET recent`. `groupSeconds` (0-3600, default 60, `0` = off): a notification identical to one from the last `groupSeconds` (same source, title, message and level) is counted (`count` in `GET recent`) instead of shown again. `strict: true` rejects notifications whose `source` has no profile. `soundGain` (100-300, default 200) is the boost of every sound, in percent: the TV's system sounds are quiet, and above about 250 some distort. |
 
 **Webhooks** turn any JSON a service already sends (GitHub, Home Assistant, Grafana, a router) into a notification, without changing the sender:
 
@@ -145,6 +145,8 @@ A sound can be chosen with the header `Sound` (or the JSON field `sound`, and `v
 Example, GitHub pushes: `POST hooks` with `{"name":"github","title":"{{repository.name}}","message":"{{pusher.name}} pushed {{head_commit.message}}","icon":"📦"}`, then give GitHub the URL `http://<TV-IP>:8099/plugins/notification-center/api/hook/github`.
 
 ## Security notes
+
+- This Shard has the `exec` permission for exactly one command: `paplay --volume=<integer> /usr/share/feedback/sound/operation/<one of 8 fixed files>`. The sound is chosen from a closed list and the volume is a clamped integer, so no text from a request reaches the command. Anyone who can reach the Shard can make the TV play those sounds (at most one every 0.8 s); with pairing on they need a key.
 
 - A source key is stored in `ctx.config` on the TV and checked by the Shard; it is not a replacement for Vetro pairing (it travels in clear text on the LAN, like the rest of the traffic) but it lets you accept one sender and refuse the others when pairing is off. `GET profiles` never returns it.
 - Anyone who can reach the Shard can change sources, settings and hooks, as they can change the language. Hooks and sources can only shape the text, icon, level, mode and duration of a notification: nothing can point the Shard at another app or run a command.

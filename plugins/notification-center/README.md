@@ -17,6 +17,8 @@ returns the same description as JSON. Apps that already publish to [ntfy](https:
 rate limit and key (`X-NC-Key`); quiet hours hold back everything below a chosen level; identical repeats are counted instead of shown again; and **webhooks**
 (`POST hook/<name>`) turn any JSON, such as a GitHub or Home Assistant payload, into a notification with `{{path}}` templates.
 
+**Cast** (optional): if the separate [Cast](https://github.com/mclaudiopt/tv-cast) Shard is installed on this TV, `POST cast` (and the option "Send to all TVs" next to the send button of the panel) sends one notification to every Samsung TV of your network that has the Notification Center. This Shard only forwards the message to Cast on the same TV (loopback), after the same sender checks as `notify`; without Cast the call answers `502` and nothing else changes.
+
 **Sounds** (optional): a request can ask for one of the TV's system sounds with `sound` (and `volume`); the default is silence. This Shard plays it with one fixed `paplay` command (see Permissions), at most one sound every 0.8 s, with a volume you set next to the selector (the system sounds are quiet, so 100 % is already boosted), and in time with the banner (the sound starts a delay after the request that you tune by ear, because the Shard cannot see when the banner appears). The **Testing** tab has the sound tests, the timing, and a goodie: 10 seconds of a well-known tune played only with the notification sounds.
 
 The panel (tab **Notifications**) is bilingual (English by default, Portuguese optional) and has a form, a request generator, an API explorer, an icon

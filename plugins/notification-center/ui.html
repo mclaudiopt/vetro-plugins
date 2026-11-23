@@ -179,7 +179,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
         <h2 data-t="send">Send a notification</h2>
         <div class="levels" id="levels"></div>
         <div class="modes" id="modes"></div>
-        <div class="row" style="margin-top:12px"><span class="lab" style="margin:0" data-t="f_sound">Sound</span><select id="sound" style="width:auto;margin:0"></select><span class="lab" style="margin:0 0 0 14px" data-t="f_mvol">Sound volume (%)</span><input type="range" id="mvol" min="10" max="100" step="5" value="100" style="width:140px"><b id="mvolv">100%</b></div>
+        <div class="row" style="margin-top:12px"><span class="lab" style="margin:0" data-t="f_sound">Sound</span><select id="sound" style="width:auto;margin:0"></select><span style="display:flex;align-items:center;gap:8px;flex:1;min-width:210px"><span class="lab" style="margin:0" data-t="f_mvol">Sound volume (%)</span><input type="range" id="mvol" min="10" max="100" step="5" value="100" style="flex:1;min-width:80px"><b id="mvolv">100%</b></span></div>
       </div>
       <div class="sec">
         <h2 data-t="sec_msg">Message</h2>
@@ -196,6 +196,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
       <div class="foot">
         <div class="dur"><span data-t="secs">Show for (s)</span><input type="range" id="secs" min="1" max="60" value="8"><b id="secsv">8 s</b></div>
         <label class="chk"><input type="checkbox" id="open" checked> <span data-t="open">Show on TV now</span></label>
+        <label class="chk" id="castrow" hidden><input type="checkbox" id="castall"> <span data-t="cast_all">Send to all TVs</span> <span id="castcount"></span></label>
         <button class="send" id="send" type="button" data-t="btn">Send</button>
       </div>
       <div class="msg" id="result"></div>
@@ -521,6 +522,13 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
   // The dashboard frame has no allow-forms: use buttons and the Enter key, not <form>.
   $("send").addEventListener("click", function () {
     say(tr("sending"));
+    if ($("castall").checked) {
+      // Cast (optional Shard): the same notification to every TV of the network; this TV is normally one of them, so nothing is also sent locally.
+      act(this, api("cast", { title: $("title").value, message: $("message").value, level: level, icon: $("icon").value, mode: mode, duration: parseInt($("secs").value, 10) || 8 })
+        .then(function (r) { say(tr("cast_done").replace("{n}", r.sent).replace("{m}", r.sent + r.failed), r.failed ? "err" : "ok"); $("message").value = ""; preview(); })
+        .catch(function (e) { say(e.message, "err"); throw e; }));
+      return;
+    }
     act(this, api("notify", { title: $("title").value, message: $("message").value, level: level, icon: $("icon").value, image: $("image").value, wallpaper: $("wallpaper").value, mode: mode, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked, sound: $("sound").value, group: false })
       .then(function (r) { say(r.open === "not requested" ? tr("queuedq") : tr("queued"), "ok"); $("message").value = ""; preview(); recent().catch(function () {}); })
       .catch(function (e) { say(e.message, "err"); throw e; }));
@@ -796,6 +804,15 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     var baseApplyLang = applyLang;
     applyLang = function () { baseApplyLang(); paintSounds(); };
     loadSounds();
+  })();
+
+  // Cast (optional Shard): "Send to all TVs" is shown only when the Cast Shard is installed on this TV and knows at least one TV.
+  (function () {
+    T.en.cast_all = "Send to all TVs"; T.en.cast_done = "Sent to {n} of {m} TVs";
+    T.pt.cast_all = "Enviar a todas as TVs"; T.pt.cast_done = "Enviado a {n} de {m} TVs";
+    api("cast").then(function (d) {
+      if (d.installed && d.tvs > 0) { $("castrow").hidden = false; $("castcount").textContent = "(" + d.tvs + ")"; }
+    }).catch(function () { /* no Cast: the option stays hidden */ });
   })();
 
   applyLang();

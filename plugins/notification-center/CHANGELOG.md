@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.0
+- **Cast bridge (optional):** `POST cast` sends one notification to every TV of the network that has the Notification Center, through the separate Cast Shard on the same TV; `GET cast` says whether Cast is installed, how many TVs it knows and its groups. Same sender checks as `notify`; forwards message, title, icon, level, mode, duration and group or tvIds only. The panel has an option "Send to all TVs" next to the send button, shown only when Cast is installed.
+- The sender checks (strict mode, source on/off, key, rate limit, defaults) are one function now, shared by `notify` and `cast`.
+
 ## 0.6.1
 Follow-ups from the catalog review of 0.3.1 (versions 0.4.0 to 0.6.0 were only published in the author's own repository).
 - The grouping memory is bounded: nothing is stored when grouping is off, entries older than the window are dropped, and at most 200 are kept (a flood of distinct notifications no longer slows every request).

@@ -393,6 +393,8 @@ module.exports = function (ctx) {
                 { method: 'POST', path: 'hooks', summary: 'Create, change or delete a webhook.', body: '{name, message (template), title?, level?, icon?, mode?, duration?, source?, delete?}; templates use {{a.b.0.c}} from the posted JSON', returns: '{ok, name, hook, url}' },
                 { method: 'POST', path: 'hook/<name>', summary: 'Send any JSON (up to 64 KB) to a webhook; its templates build the notification. Non-JSON bodies are available as {{text}}.', returns: 'same as notify' },
                 { method: 'POST', path: 'play', summary: 'Play one of the sounds without a notification, or a 10-second tune made of them (song). The sound volume setting applies. Answers 429 if another sound was played less than 0.8 s ago.', body: '{sound, volume?} or {song:"rock"|"fate"|"stop"}', returns: '{ok, sound:"requested"} or {ok, song:"playing"}' },
+                { method: 'POST', path: 'cast', summary: 'Send one notification to every Samsung TV of the network that has the Notification Center, through the optional Cast Shard on this TV. Forwards message, title, icon, level, mode, duration and optionally group or tvIds (sound and images are not forwarded; each TV applies its own settings).', body: '{message, title?, icon?, level?, mode?, duration?, group?, tvIds?}', returns: '{ok, sent, failed, results:[{id,name,ok,error}]}' },
+                { method: 'GET', path: 'cast', summary: 'Is the Cast Shard installed on this TV, how many TVs it knows and which groups.', returns: '{installed, tvs, groups}' },
                 { method: 'GET', path: 'sounds', summary: 'The sounds a request can choose, whether this Shard can play sounds (exec granted), the volume and timing settings, the timing of the last banner sound (trace) and the result of the last attempt.', returns: '{sounds:[...], songs:[{name,title}], available, volume, delayMs, trace, last}' },
                 { method: 'GET', path: 'emoji', summary: 'The bundled emoji list used by the icon picker.', returns: '{source, groups, list}' },
                 { method: 'GET', path: 'api', summary: 'This description.', returns: 'JSON' }
@@ -506,19 +508,78 @@ module.exports = function (ctx) {
     }
 
     // The one way into the queue: applies the source's profile (key, enabled, rate, defaults), then validates, then quiet hours and grouping.
+    // The checks every sender goes through before anything is queued or sent: strict mode, the source's on/off switch, key and rate limit, then its defaults.
+    // Answers the error itself and returns null, or returns {b, source, settings}.
+    function admit(b, headers, res, forcedSource) {
+        var settings = settingsNow(), profiles = cfgGet().profiles || {};
+        var source = forcedSource || rules.cleanSource(b.source || headers['x-nc-source']);
+        var profile = source && has(profiles, source) ? profiles[source] : null;
+        if (settings.strict && !profile) { sendJson(res, 403, { error: source ? 'unknown source' : 'source is required' }); return null; }
+        if (profile) {
+            if (profile.enabled === false) { sendJson(res, 403, { error: 'source is disabled' }); return null; }
+            if (profile.key && !rules.sameKey(headers['x-nc-key'] || b.key, profile.key)) { sendJson(res, 403, { error: 'invalid key for this source' }); return null; }
+            if (!limiter(source, profile.rate, Date.now())) { sendJson(res, 429, { error: 'rate limit for this source' }); return null; }
+        }
+        return { b: rules.applyProfile(b, profile), source: source, settings: settings };
+    }
+
+    // Cast (optional, a separate Shard): one notification to every Samsung TV of the network that has the Notification Center. This Shard only forwards the
+    // fields Cast understands to Cast on the same TV (loopback), after the same sender checks; each TV then applies its own quiet hours, grouping and sources.
+    function vetroJson(method, p, obj, cb) {
+        var body = obj ? JSON.stringify(obj) : null, done = false, limit = 20000;
+        function end(e, c, d) { if (!done) { done = true; cb(e, c, d); } }
+        try {
+            var rq = http.request({ host: VHOST, port: VPORT, path: p, method: method, timeout: limit, headers: body ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } : {} }, function (r) {
+                var chunks = [], n = 0;
+                r.on('data', function (d) { n += d.length; if (n > 65536) { r.destroy(); end(new Error('answer too large')); } else { chunks.push(d); } });
+                r.on('end', function () { var j = null; try { j = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (e) { j = null; } end(null, r.statusCode, j); });
+                r.on('error', function (e) { end(e); });
+            });
+            rq.on('error', function (e) { end(e); });
+            rq.setTimeout(limit);
+            rq.on('timeout', function () { rq.destroy(); end(new Error('timeout')); });
+            if (body) { rq.write(body); }
+            rq.end();
+        } catch (e) { end(e); }
+    }
+    function castInfo(res) {
+        vetroJson('GET', '/plugins/cast/api/state', null, function (err, code, d) {
+            var tvs = !err && code === 200 && d && Array.isArray(d.tvs) ? d.tvs : null, groups = [];
+            if (tvs) { tvs.forEach(function (x) { var g = x && typeof x.group === 'string' ? x.group : ''; if (g && groups.indexOf(g) < 0) { groups.push(g); } }); }
+            sendJson(res, 200, { installed: !!tvs, tvs: tvs ? tvs.length : 0, groups: groups });
+        });
+    }
+    function handleCast(req, res) {
+        readBodyG(req, res, function (raw) {
+            var b;
+            try { b = JSON.parse(raw); } catch (e) { return sendJson(res, 400, { error: 'invalid JSON' }); }
+            b = rules.isObj(b) ? b : {};
+            var adm = admit(b, req.headers || {}, res);
+            if (!adm) { return; }
+            b = adm.b;
+            var message = clean(b.message, MAX_MESSAGE), dur = num(b.duration), ids = [];
+            if (!message) { return sendJson(res, 400, { error: 'message is required' }); }
+            if (Array.isArray(b.tvIds)) { b.tvIds.slice(0, 20).forEach(function (x) { var v = clean(x, 40); if (v) { ids.push(v); } }); }
+            var out = { message: message, title: clean(b.title, MAX_TITLE), icon: cleanIcon(b.icon), level: has(LEVELS, b.level) ? b.level : 'info', mode: has(MODES, b.mode) ? b.mode : 'banner',
+                duration: dur >= MIN_DURATION ? (dur > MAX_DURATION ? MAX_DURATION : dur) : DEFAULT_DURATION };
+            if (clean(b.group, 24)) { out.group = clean(b.group, 24); }
+            if (ids.length) { out.tvIds = ids; }
+            vetroJson('POST', '/plugins/cast/api/cast', out, function (err, code, d) {
+                if (err || code === 404 || code === 405) { return sendJson(res, 502, { ok: false, error: 'the Cast Shard is not installed or not running on this TV' }); }
+                if (code !== 200 || !d || !Array.isArray(d.results)) { return sendJson(res, code >= 400 && code < 600 ? code : 502, { ok: false, error: str(d && d.error) || 'Cast answered ' + code }); }
+                var okCount = d.results.filter(function (x) { return x && x.ok; }).length;
+                sendJson(res, 200, { ok: true, sent: okCount, failed: d.results.length - okCount, results: d.results.slice(0, 50).map(function (x) { return { id: str(x && x.id), name: str(x && x.name).slice(0, 60), ok: !!(x && x.ok), error: str(x && x.error).slice(0, 120) }; }) });
+            });
+        });
+    }
+
     function submit(b, headers, res, forcedSource) {
         b = rules.isObj(b) ? b : {};
         {
-            var settings = settingsNow(), profiles = cfgGet().profiles || {};
-            var source = forcedSource || rules.cleanSource(b.source || headers['x-nc-source']);
-            var profile = source && has(profiles, source) ? profiles[source] : null;
-            if (settings.strict && !profile) { return sendJson(res, 403, { error: source ? 'unknown source' : 'source is required' }); }
-            if (profile) {
-                if (profile.enabled === false) { return sendJson(res, 403, { error: 'source is disabled' }); }
-                if (profile.key && !rules.sameKey(headers['x-nc-key'] || b.key, profile.key)) { return sendJson(res, 403, { error: 'invalid key for this source' }); }
-                if (!limiter(source, profile.rate, Date.now())) { return sendJson(res, 429, { error: 'rate limit for this source' }); }
-            }
-            b = rules.applyProfile(b, profile);
+            var adm = admit(b, headers, res, forcedSource);
+            if (!adm) { return; }
+            b = adm.b;
+            var settings = adm.settings, source = adm.source;
             var message = clean(b.message, MAX_MESSAGE);
             if (!message) { return sendJson(res, 400, { error: 'message is required' }); }
             var secs = num(b.seconds);
@@ -652,6 +713,8 @@ module.exports = function (ctx) {
             if (sub === 'img' && req.method === 'GET') { serveImage(req, res); return true; }
             if (sub === 'ntfy' && req.method === 'POST') { handleNtfy(req, res); return true; }
             if (sub === 'play' && req.method === 'POST') { handlePlay(req, res); return true; }
+            if (sub === 'cast' && req.method === 'POST') { handleCast(req, res); return true; }
+            if (sub === 'cast' && req.method === 'GET') { castInfo(res); return true; }
             if (sub === 'sounds' && req.method === 'GET') { sendJson(res, 200, { sounds: Object.keys(rules.SOUNDS), songs: Object.keys(SONGS).map(function (k) { return { name: k, title: SONGS[k].title }; }), available: soundAvailable(), volume: settingsNow().soundVolume, delayMs: settingsNow().soundDelayMs, trace: soundTrace, last: soundLast }); return true; }
             if (sub === 'profiles' && (req.method === 'GET' || req.method === 'POST')) { handleProfiles(req, res); return true; }
             if (sub === 'settings' && (req.method === 'GET' || req.method === 'POST')) { handleSettings(req, res); return true; }

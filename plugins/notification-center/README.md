@@ -49,10 +49,16 @@ It runs only when a request has a `sound` (or calls `POST play`), at most once e
 
 ## Data it keeps
 
-The display language and the list of the last 20 notifications sent (title, message, level, mode, icon, image and wallpaper URLs, time) are kept in
-`ctx.config`, so "Recently sent" and Resend survive a restart. The queue (up to 5 active notifications) lives in memory and is cleared when the Shard stops.
+In `ctx.config` (on the TV, kept across restarts and updates):
+- the display language, and the list of the last 20 notifications sent (title, message, level, mode, icon, sound, image and wallpaper URLs, time), so "Recently sent" and Resend survive a restart;
+- the **sources** (profiles): per sender its icon, level, mode, duration, sound, volume, rate limit and on/off switch, and its **key in plain text** if it has one (the API never returns a key, only `hasKey`; but it is stored as text in the Shard's settings);
+- the **settings**: quiet hours, grouping window, strict mode, sound volume and sound delay;
+- the **webhooks** (their templates).
+
+The queue (up to 5 active notifications) and the grouping memory (at most 200 recent notifications, only those inside the grouping window) live in memory and are cleared when the Shard stops.
 The queue file and the file of already shown ids (`/tmp/notification-center-seen.json`) are temporary files in `/tmp`.
 
+**Grouping is on by default (60 s):** a notification identical to one sent in the last minute is counted instead of shown again (the answer says `merged`). The panel's Resend and test buttons send `group: false`, so they always show. Set `groupSeconds` to 0 to turn grouping off.
 ## Install
 
 1. Vetro with root connected. If Vetro keeps restarting, set the TV's **Host PC IP to `127.0.0.1`** (Developer Mode), or it can end up in safe mode.

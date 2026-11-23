@@ -476,7 +476,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
         rb[k].addEventListener("click", function () {
           var n = lastRecent[parseInt(this.getAttribute("data-i"), 10)];
           if (!n) { return; }
-          act(this, api("notify", { title: n.title, message: n.message, level: n.level, icon: n.icon, image: n.image, wallpaper: n.wallpaper, mode: n.mode, sound: n.sound, volume: n.volume, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked })
+          act(this, api("notify", { title: n.title, message: n.message, level: n.level, icon: n.icon, image: n.image, wallpaper: n.wallpaper, mode: n.mode, sound: n.sound, volume: n.volume, group: false, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked })
             .then(function () { say(tr("resent"), "ok"); recent(); })
             .catch(function (e) { say(e.message, "err"); throw e; }));
         });
@@ -521,7 +521,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
   // The dashboard frame has no allow-forms: use buttons and the Enter key, not <form>.
   $("send").addEventListener("click", function () {
     say(tr("sending"));
-    act(this, api("notify", { title: $("title").value, message: $("message").value, level: level, icon: $("icon").value, image: $("image").value, wallpaper: $("wallpaper").value, mode: mode, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked, sound: $("sound").value })
+    act(this, api("notify", { title: $("title").value, message: $("message").value, level: level, icon: $("icon").value, image: $("image").value, wallpaper: $("wallpaper").value, mode: mode, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked, sound: $("sound").value, group: false })
       .then(function (r) { say(r.open === "not requested" ? tr("queuedq") : tr("queued"), "ok"); $("message").value = ""; preview(); recent().catch(function () {}); })
       .catch(function (e) { say(e.message, "err"); throw e; }));
   });
@@ -617,7 +617,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     for (i = 0; i < b.length; i++) {
       b[i].addEventListener("click", function () {
         var m = this.getAttribute("data-stm");
-        act(this, api("notify", { title: "Test", message: "Notification Center test (" + m + ")", level: "ok", mode: m, duration: 8 }).then(function () { $("stmsg").textContent = tr("sent_ok"); $("stmsg").className = "msg ok"; }));
+        act(this, api("notify", { title: "Test", message: "Notification Center test (" + m + ")", level: "ok", mode: m, duration: 8, group: false }).then(function () { $("stmsg").textContent = tr("sent_ok"); $("stmsg").className = "msg ok"; }));
       });
     }
   })();
@@ -790,7 +790,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     $("tsongstop").addEventListener("click", function () { act(this, api("play", { song: "stop" })); });
     $("tsend").addEventListener("click", function () {
       if (!chosen) { $("tsmsg").textContent = tr("t_none"); $("tsmsg").className = "msg err"; return; }
-      act(this, api("notify", { title: "Sound test", message: "Sound: " + chosen, level: "info", mode: "banner", duration: 6, sound: chosen, volume: parseInt($("tvol").value, 10) })
+      act(this, api("notify", { title: "Sound test", message: "Sound: " + chosen, level: "info", mode: "banner", duration: 6, group: false, sound: chosen, volume: parseInt($("tvol").value, 10) })
         .then(function () { $("tsmsg").textContent = tr("t_sent"); $("tsmsg").className = "msg ok"; }, function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; throw e; }));
     });
     var baseApplyLang = applyLang;

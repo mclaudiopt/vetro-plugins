@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+Follow-ups from the catalog review of 0.3.1 (versions 0.4.0 to 0.6.0 were only published in the author's own repository).
+- The grouping memory is bounded: nothing is stored when grouping is off, entries older than the window are dropped, and at most 200 are kept (a flood of distinct notifications no longer slows every request).
+- New field `group` (`false` = never merge): the panel's Resend and test buttons send it, so they always show instead of answering `merged` while the panel says "Sent again".
+- README "Data it keeps" lists the sources (with their keys, stored as text), settings and webhooks; API.md says that a source key stops misconfigured senders, not hostile ones.
+
 ## 0.6.0
 - **Volume setting:** `soundVolume` (10-100 %, default 100) replaces the old boost (`soundGain`); a slider next to the sound selector in the send form and in the Testing tab. The `volume` of a request is a share of it.
 - **The sound is in time with the banner:** `soundDelayMs` (default 3000 ms) is how long after the request the sound starts; tune it by ear in the Testing tab (the banner service cannot tell the Shard when the banner appears). If the banner is recorded in the file the Shard reads, the sound starts as soon as it is seen. `GET sounds` has a `trace` of the last timing.

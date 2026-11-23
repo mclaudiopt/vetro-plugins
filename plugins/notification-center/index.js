@@ -105,6 +105,18 @@ module.exports = function (ctx) {
     var limiter = rules.makeLimiter(), groups = {};   // per-source rate windows and recently seen repeats (memory only)
     var str = rules.str, num = rules.num, has = rules.has;
     function cfgGet() { return ctx.config.get() || {}; }
+    // Drops the grouping entries older than the window, and keeps at most MAX_GROUPS (the oldest go first). It walks the map only once it has grown past
+    // 50 entries, so a flood of distinct notifications cannot make every request slower.
+    var MAX_GROUPS = 200;
+    function pruneGroups(now, windowMs) {
+        var keys = Object.keys(groups);
+        if (keys.length <= 50) { return; }
+        keys.forEach(function (k) { if (now - groups[k].at >= windowMs) { delete groups[k]; } });
+        keys = Object.keys(groups);
+        if (keys.length > MAX_GROUPS) {
+            keys.sort(function (x, y) { return groups[x].at - groups[y].at; }).slice(0, keys.length - MAX_GROUPS).forEach(function (k) { delete groups[k]; });
+        }
+    }
     function soundVolume(v) { var n = num(v); return n >= 10 ? (n > 100 ? 100 : n) : 0; }
     function settingsNow() { return rules.sanitizeSettings(cfgGet().settings, {}); }
     function clean(text, max) {
@@ -360,6 +372,7 @@ module.exports = function (ctx) {
                 open: { type: 'boolean', default: true, note: 'false only queues it, without launching the app or its service.' },
                 sound: { type: 'string', enum: Object.keys(rules.SOUNDS), note: 'Plays one of the TV system sounds with the notification. Empty = no sound; one sound at most every 0.8 s. Not played for a notification held back by quiet hours or merged as a repeat.' },
                 volume: { type: 'integer', min: 10, max: 100, default: 100, note: 'Volume of the sound, in percent.' },
+                group: { type: 'boolean', default: true, note: 'false = never merge this notification with an identical recent one (the panel sends false for Resend and the test buttons). Merging only happens while the setting groupSeconds is above 0.' },
                 source: { type: 'string', max: 32, note: 'Who is sending (a-z, 0-9, . _ -), or the header X-NC-Source. If a profile with that name exists, its icon, level, mode and duration fill in what you leave out, and its key (header X-NC-Key), enabled flag and rate limit apply.' }
             },
             endpoints: [
@@ -539,17 +552,19 @@ module.exports = function (ctx) {
                 recent.unshift(entry); if (recent.length > MAX_RECENT) { recent.pop(); } saveRecent();
                 return sendJson(res, 200, { ok: true, id: note.id, suppressed: 'quiet hours' });
             }
-            // Grouping: the same source, title, message and level within the window is counted, not shown again.
-            var sig = [source, note.title, note.message, note.level].join('\u0001'), nowMs = Date.now(), g = groups[sig], gk, r;
-            if (settings.groupSeconds && g && nowMs - g.at < settings.groupSeconds * 1000) {
-                g.count += 1;
-                for (r = 0; r < recent.length; r++) { if (recent[r].id === g.id) { recent[r].count = g.count; } }
-                saveRecent();
-                return sendJson(res, 200, { ok: true, id: g.id, merged: true, count: g.count });
+            // Grouping: the same source, title, message and level within the window is counted, not shown again. It is skipped when it is off
+            // (groupSeconds 0) and for a request that says group:false (the panel's Resend and test buttons). The map only holds entries younger than the window.
+            if (settings.groupSeconds && b.group !== false) {
+                var sig = [source, note.title, note.message, note.level].join(String.fromCharCode(1)), nowMs = Date.now(), g = has(groups, sig) ? groups[sig] : null, r;
+                if (g && nowMs - g.at < settings.groupSeconds * 1000) {
+                    g.count += 1;
+                    for (r = 0; r < recent.length; r++) { if (recent[r].id === g.id) { recent[r].count = g.count; } }
+                    saveRecent();
+                    return sendJson(res, 200, { ok: true, id: g.id, merged: true, count: g.count });
+                }
+                groups[sig] = { at: nowMs, id: note.id, count: 1 };
+                pruneGroups(nowMs, settings.groupSeconds * 1000);
             }
-            groups[sig] = { at: nowMs, id: note.id, count: 1 };
-            gk = Object.keys(groups);
-            if (gk.length > 60) { gk.forEach(function (k) { if (nowMs - groups[k].at > 3600000) { delete groups[k]; } }); }
             queue.push(note);
             if (queue.length > MAX_QUEUE) { queue.shift(); }
             writeQueueFile();

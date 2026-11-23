@@ -59,7 +59,14 @@ module.exports = function (ctx) {
     try { var saved = (ctx.config.get() || {}).recent; if (Array.isArray(saved)) { recent = saved.slice(0, MAX_RECENT); } } catch (e) { recent = []; }
     function saveRecent() { try { var c = ctx.config.get() || {}; c.recent = recent; ctx.config.set(c); } catch (e) { /* storage unavailable */ } }
     var seq = 0;
-    var lastOpen = 0, appPoll = 0;   // appPoll: when the app screen last asked for the queue (0 = it is closed)
+    var lastOpen = 0, appPoll = 0;
+    // When the full-screen app last reached this Shard (for the status route): the script nt.js, the queue poll and a picture, and from which address.
+    var appSeen = { ntjs: 0, poll: 0, img: 0, from: '' };
+    function mark(kind, req) {
+        appSeen[kind] = Date.now();
+        try { appSeen.from = str(req && req.socket && req.socket.remoteAddress).replace(/^::ffff:/, '').slice(0, 45); } catch (e) { appSeen.from = ''; }
+    }
+    function ageS(t) { return t ? Math.round((Date.now() - t) / 1000) : null; }   // appPoll: when the app screen last asked for the queue (0 = it is closed)
 
     // Display language of the app screen and the panel: 'en' (default) or 'pt'. The only thing kept in ctx.config.
     function getLang() { var c = ctx.config.get() || {}; return c.lang === 'pt' ? 'pt' : 'en'; }
@@ -289,7 +296,7 @@ module.exports = function (ctx) {
 
     // Installation status for the panel: is the companion app (and its service) installed, is Vetro pairing on, which Shard version.
     function statusInfo(cb) {
-        var out = { version: '', app: false, appVersion: '', service: false, pairing: 'unknown', handoff: false, sound: soundAvailable() }, left = 2;
+        var out = { version: '', app: false, appVersion: '', service: false, pairing: 'unknown', handoff: false, sound: soundAvailable(), screen: { ntjsAgoS: ageS(appSeen.ntjs), pollAgoS: ageS(appSeen.poll), imgAgoS: ageS(appSeen.img), from: appSeen.from, open: appPoll > 0 && Date.now() - appPoll < APP_ACTIVE_MS } }, left = 2;
         try { out.handoff = fs.existsSync(queueFile); } catch (e) { /* unknown */ }
         try { out.version = require('./manifest.json').version; } catch (e) { /* manifest not readable */ }
         function once() { var d = false; return function () { if (!d) { d = true; left -= 1; if (!left) { cb(out); } } }; }
@@ -382,7 +389,7 @@ module.exports = function (ctx) {
                 { method: 'GET', path: 'notifications', summary: 'The active queue (used by the app and its service); add ?js=1 for the script form.', returns: '{lang, notifications:[...]}' },
                 { method: 'GET', path: 'recent', summary: 'The last notifications sent.', returns: '{recent:[...]}' },
                 { method: 'GET', path: 'img?id=<id>[&kind=wallpaper][&info=1]', summary: 'The picture of a queued notification, fetched and served by the Shard; info=1 returns {ok,type,bytes}.', returns: 'image bytes or JSON' },
-                { method: 'GET', path: 'status', summary: 'Installation status: companion app, its service, Vetro pairing, Shard version.', returns: '{version, app, appVersion, service, pairing, sound}' },
+                { method: 'GET', path: 'status', summary: 'Installation status: companion app, its service, Vetro pairing, Shard version.', returns: '{version, app, appVersion, service, pairing, sound, screen}' },
                 { method: 'GET', path: 'lang', summary: 'Display language (en or pt).', returns: '{lang}' },
                 { method: 'POST', path: 'lang', summary: 'Set the display language.', body: '{lang: "en"|"pt"}', returns: '{lang}' },
                 { method: 'GET', path: 'profiles', summary: 'The sources (profiles): defaults per sender. Keys are never returned, only hasKey.', returns: '{profiles:{<source>:{enabled,icon,level,mode,duration,rate,hasKey}}, max}' },
@@ -710,7 +717,7 @@ module.exports = function (ctx) {
             if (sub === 'ui' && req.method === 'GET') { sendFile(res, 'ui.html', 'text/html; charset=utf-8'); return true; }
             if (sub === 'api' && req.method === 'GET') { sendJson(res, 200, describe()); return true; }
             if (sub === 'status' && req.method === 'GET') { statusInfo(function (o) { sendJson(res, 200, o); }); return true; }
-            if (sub === 'img' && req.method === 'GET') { serveImage(req, res); return true; }
+            if (sub === 'img' && req.method === 'GET') { mark('img', req); serveImage(req, res); return true; }
             if (sub === 'ntfy' && req.method === 'POST') { handleNtfy(req, res); return true; }
             if (sub === 'play' && req.method === 'POST') { handlePlay(req, res); return true; }
             if (sub === 'cast' && req.method === 'POST') { handleCast(req, res); return true; }
@@ -721,10 +728,11 @@ module.exports = function (ctx) {
             if (sub === 'hooks' && (req.method === 'GET' || req.method === 'POST')) { handleHooks(req, res); return true; }
             if (/^hook\/[^\/]+$/.test(sub) && req.method === 'POST') { handleHook(req, res, sub.slice(5)); return true; }
             if (sub === 'emoji' && req.method === 'GET') { sendFile(res, 'emoji.json', 'application/json; charset=utf-8'); return true; }
-            if (sub === 'nt.js' && req.method === 'GET') { sendFile(res, 'nt.js', 'application/javascript; charset=utf-8'); return true; }
+            if (sub === 'nt.js' && req.method === 'GET') { mark('ntjs', req); sendFile(res, 'nt.js', 'application/javascript; charset=utf-8'); return true; }
             if (sub === 'notify' && req.method === 'POST') { handleNotify(req, res); return true; }
             if (sub === 'notifications' && req.method === 'GET') {
                 if (/[?&]src=app(&|$)/.test(String(req.url || ''))) {
+                    mark('poll', req);
                     appPoll = /[?&]bye=1(&|$)/.test(String(req.url || '')) ? 0 : Date.now();
                     if (appPoll) { queue.forEach(function (n) { if (n.mode !== 'banner' && has(waitingSounds, n.id)) { waitingSounds[n.id].fire(); } }); }
                 }

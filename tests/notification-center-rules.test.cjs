@@ -251,3 +251,22 @@ test('an entry is forgotten once the grouping window has passed', async () => {
         assert.notEqual((await call(s, 'POST', 'notify', {message: 'window', open: false})).json.merged, true, 'after the window it is shown again');
     } finally { if (s.stop) s.stop(); }
 });
+
+test('GET status has a screen block that records when the full-screen app reached the Shard', async () => {
+    const s = start();
+    try {
+        const before = (await call(s, 'GET', 'status')).json.screen;
+        assert.deepEqual([before.ntjsAgoS, before.pollAgoS, before.imgAgoS, before.open], [null, null, null, false]);
+        await call(s, 'GET', 'nt.js');
+        await call(s, 'GET', 'notifications?src=app');
+        await call(s, 'GET', 'img?id=none');
+        const after = (await call(s, 'GET', 'status')).json.screen;
+        assert.equal(after.ntjsAgoS, 0);
+        assert.equal(after.pollAgoS, 0);
+        assert.equal(after.imgAgoS, 0);
+        assert.equal(after.open, true, 'the app polled just now, so it counts as open');
+        assert.equal(typeof after.from, 'string');
+        await call(s, 'GET', 'notifications?src=app&bye=1');
+        assert.equal((await call(s, 'GET', 'status')).json.screen.open, false, 'bye=1 means it left');
+    } finally { if (s.stop) s.stop(); }
+});

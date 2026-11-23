@@ -186,3 +186,27 @@ test('the language of the screen follows the Shard setting (English by default, 
     env.run();
     assert.match(env.card().getElementsByTagName('h1')[0].textContent, /Centro de Notifica/);
 });
+
+test('the overlay look is applied from the answer of the Shard, and the solid look removes it again', () => {
+    const env = makeEnv({queue: [note({mode: 'full', title: 'Big', message: 'Card'})]});
+    env.style = 'overlay';
+    const original = env.ctx.XMLHttpRequest;
+    env.ctx.XMLHttpRequest = function () {
+        const x = new original();
+        const send = x.send;
+        x.send = () => { x.status = 200; x.responseText = JSON.stringify({lang: 'en', style: env.style, notifications: env.queue}); env.requests.push(x.url); x.onload(); };
+        return x;
+    };
+    env.run();
+    assert.equal(env.body.className, 'ov', 'overlay look');
+    env.style = 'solid';
+    env.queue.push(note({id: 'n2', mode: 'full', title: 'Next'}));
+    env.advance(2100);
+    assert.equal(env.body.className, '', 'back to the solid look');
+});
+
+test('nt.js carries the overlay rules: translucent card, no opaque background, bigger text', () => {
+    assert.match(source, /body\.ov\{background:transparent\}/);
+    assert.match(source, /body\.ov #nc \.card\{background:rgba\(12,16,28,\.62\)/);
+    assert.match(source, /body\.ov #nc \.t\{font-size:68px\}/);
+});

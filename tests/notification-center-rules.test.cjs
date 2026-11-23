@@ -251,3 +251,18 @@ test('an entry is forgotten once the grouping window has passed', async () => {
         assert.notEqual((await call(s, 'POST', 'notify', {message: 'window', open: false})).json.merged, true, 'after the window it is shown again');
     } finally { if (s.stop) s.stop(); }
 });
+
+test('screenStyle is solid by default, accepts only solid or overlay, and the app gets it with the queue', async () => {
+    const s = start();
+    try {
+        assert.equal((await call(s, 'GET', 'settings')).json.settings.screenStyle, 'solid');
+        assert.equal((await call(s, 'GET', 'notifications')).json.style, 'solid');
+        assert.equal((await call(s, 'POST', 'settings', {screenStyle: 'overlay'})).json.settings.screenStyle, 'overlay');
+        assert.equal((await call(s, 'GET', 'notifications')).json.style, 'overlay');
+        for (const bad of ['neon', '', 5, null, {toString: 1}, ['overlay']]) {
+            assert.equal((await call(s, 'POST', 'settings', {screenStyle: bad})).json.settings.screenStyle, 'solid', JSON.stringify(bad));
+            await call(s, 'POST', 'settings', {screenStyle: 'overlay'});
+        }
+        assert.equal((await call(s, 'POST', 'settings', {strict: false})).json.settings.screenStyle, 'overlay', 'other settings keep it');
+    } finally { if (s.stop) s.stop(); }
+});

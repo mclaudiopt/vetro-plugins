@@ -46,7 +46,8 @@ module.exports = function (ctx) {
     var vetro = ctx.vetro && typeof ctx.vetro === 'object' ? ctx.vetro : {};
     var VHOST = typeof vetro.host === 'string' ? vetro.host : '127.0.0.1', VPORT = typeof vetro.port === 'number' ? vetro.port : 8099;
     var soundLast = null, soundAt = 0, soundTrace = null;   // soundTrace: when the last banner sound started and when its banner was seen (for the panel)
-    var seenFile = SEEN_FILE, soundWaitMs = SOUND_WAIT_MS, waitingSounds = {}, songScale = 1;   // waitingSounds: notification id -> {fire, timer}
+    var queueFile = QUEUE_FILE, seenFile = SEEN_FILE, soundWaitMs = SOUND_WAIT_MS, waitingSounds = {}, songScale = 1;   // waitingSounds: notification id -> {fire, timer}
+    if (typeof ctx.queueFile === 'string') { queueFile = ctx.queueFile; }   // only a test changes this (each test Shard gets its own file)
     if (typeof ctx.sound === 'object' && ctx.sound) {   // only a test changes these
         if (typeof ctx.sound.gapMs === 'number') { SOUND_GAP_MS = ctx.sound.gapMs; }
         if (typeof ctx.sound.waitMs === 'number') { soundWaitMs = ctx.sound.waitMs; }
@@ -289,7 +290,7 @@ module.exports = function (ctx) {
     // Installation status for the panel: is the companion app (and its service) installed, is Vetro pairing on, which Shard version.
     function statusInfo(cb) {
         var out = { version: '', app: false, appVersion: '', service: false, pairing: 'unknown', handoff: false, sound: soundAvailable() }, left = 2;
-        try { out.handoff = fs.existsSync(QUEUE_FILE); } catch (e) { /* unknown */ }
+        try { out.handoff = fs.existsSync(queueFile); } catch (e) { /* unknown */ }
         try { out.version = require('./manifest.json').version; } catch (e) { /* manifest not readable */ }
         function once() { var d = false; return function () { if (!d) { d = true; left -= 1; if (!left) { cb(out); } } }; }
         var d1 = once(), d2 = once();
@@ -404,12 +405,12 @@ module.exports = function (ctx) {
     // Written under a new name with 'wx' (fails if the name exists, never follows a planted symlink) and then renamed over the target,
     // so a symlink left at the target path is replaced, not written through.
     function writeQueueFile() {
-        var tmp = QUEUE_FILE + '.' + process.pid + '.' + Date.now().toString(36) + '.tmp';
+        var tmp = queueFile + '.' + process.pid + '.' + Date.now().toString(36) + '.tmp';
         try {
             fs.writeFileSync(tmp, JSON.stringify({ at: Date.now(), notifications: queue.map(function (n) {
                 return { id: n.id, title: n.title, message: n.message, level: n.level, mode: n.mode, duration: n.duration, icon: n.icon, expires: n.expires };
             }) }), { mode: 420, flag: 'wx' });
-            fs.renameSync(tmp, QUEUE_FILE);
+            fs.renameSync(tmp, queueFile);
         } catch (e) {
             try { fs.unlinkSync(tmp); } catch (e2) { /* nothing to remove */ }
             /* /tmp not writable: the service falls back to asking the Shard over the network */

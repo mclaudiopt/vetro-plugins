@@ -20,6 +20,7 @@ function start(options = {}) {
     const ctx = {
         id: 'notification-center', dir: fs.mkdtempSync(path.join(os.tmpdir(), 'nc-sound-')),
         config: {get: () => JSON.parse(JSON.stringify(config)), set: v => { config = JSON.parse(JSON.stringify(v)); }},
+        queueFile: path.join(os.tmpdir(), 'nc-q-' + process.pid + '-' + Math.random().toString(36).slice(2) + '.json'),
         sound: {gapMs: options.gapMs === undefined ? 0 : options.gapMs, waitMs: options.waitMs === undefined ? 0 : options.waitMs, seenFile: options.seenFile, songScale: options.songScale === undefined ? 0.01 : options.songScale}
     };
     if (options.execute !== null) {

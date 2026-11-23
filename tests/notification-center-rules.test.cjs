@@ -78,7 +78,7 @@ function start(seed) {
     const shard = create({
         id: 'notification-center', dir: fs.mkdtempSync(path.join(os.tmpdir(), 'nc-rules-')),
         config: {get: () => JSON.parse(JSON.stringify(config)), set: v => { config = JSON.parse(JSON.stringify(v)); }},
-        execute: () => Promise.reject(new Error('no exec'))
+        execute: () => Promise.reject(new Error('no exec')), queueFile: path.join(os.tmpdir(), 'nc-q-' + process.pid + '-' + Math.random().toString(36).slice(2) + '.json')
     });
     if (shard.start) shard.start();
     return shard;

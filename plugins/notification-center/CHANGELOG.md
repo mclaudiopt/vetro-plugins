@@ -1,8 +1,5 @@
 # Changelog
 
-## 0.8.0
-- **Full-screen card, overlay look:** setting `screenStyle` (`solid` or `overlay`). `overlay` draws a big translucent card in the middle with no opaque screen behind it, closer to the TV's own large notices. It is applied by `nt.js` (served by the Shard), so the installed app needs no update. Whether the picture of the running source shows through depends on the TV, the card itself is always drawn.
-
 ## 0.7.0
 - **Cast bridge (optional):** `POST cast` sends one notification to every TV of the network that has the Notification Center, through the separate Cast Shard on the same TV; `GET cast` says whether Cast is installed, how many TVs it knows and its groups. Same sender checks as `notify`; forwards message, title, icon, level, mode, duration and group or tvIds only. The panel has an option "Send to all TVs" next to the send button, shown only when Cast is installed.
 - The sender checks (strict mode, source on/off, key, rate limit, defaults) are one function now, shared by `notify` and `cast`.

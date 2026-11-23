@@ -44,18 +44,13 @@
       '#nc h1{font-size:44px;font-weight:600;margin:0 0 8px}#nc p{font-size:28px;color:#8b96ab;margin:0 0 40px}' +
       '#nc .card{display:flex;gap:28px;align-items:center;text-align:left;background:rgba(255,255,255,.08);border-radius:36px;padding:34px 42px;border-left:12px solid var(--c);margin-top:24px}' +
       '#nc .ic{width:96px;height:96px;border-radius:50%;background:var(--c);display:grid;place-items:center;flex:none}' +
-      '#nc .t{font-size:38px;font-weight:600}#nc .m{font-size:30px;color:#c4cde0;margin-top:6px}#log{display:none}' +
-      // Overlay look: no opaque screen behind, a big translucent card in the middle, no header lines.
-      'body.ov{background:transparent}body.ov #nc{width:1560px;max-width:94%}body.ov #nc h1,body.ov #nc>p{display:none}' +
-      'body.ov #nc .card{background:rgba(12,16,28,.62);border-radius:56px;padding:64px 84px;gap:52px;margin-top:0;border-left-width:16px}' +
-      'body.ov #nc .ic{width:168px;height:168px}body.ov #nc .t{font-size:68px}body.ov #nc .m{font-size:48px;margin-top:10px;color:#e3e9f5}';
+      '#nc .t{font-size:38px;font-weight:600}#nc .m{font-size:30px;color:#c4cde0;margin-top:6px}#log{display:none}';
     document.head.appendChild(st);
     cardEl = document.createElement('div'); cardEl.id = 'nc';
     cardEl.innerHTML = '<h1></h1><p></p><div id="ncl"></div>';
     document.body.appendChild(cardEl);
     applyLang('en');
   })();
-  function applyStyle(name) { try { document.body.className = name === 'overlay' ? 'ov' : ''; } catch (e) { /* no body yet */ } }
   function applyLang(l) {
     TX = DICT[l] || DICT.en;
     if (!cardEl) { return; }
@@ -138,9 +133,9 @@
       if (i >= list.length) { return done(errors.join('; ') || 'no address'); }
       var base = list[i++];
       xhrGet(base, function (err, text) {
-        if (!err) { try { apiGood = base; var jd = JSON.parse(text); applyLang(jd.lang); applyStyle(jd.style); return done(null, jd.notifications || []); } catch (e) { err = 'json'; } }
+        if (!err) { try { apiGood = base; var jd = JSON.parse(text); applyLang(jd.lang); return done(null, jd.notifications || []); } catch (e) { err = 'json'; } }
         scriptGet(base, function (err2, data) {
-          if (!err2) { apiGood = base; applyLang(data && data.lang); applyStyle(data && data.style); return done(null, (data && data.notifications) || []); }
+          if (!err2) { apiGood = base; applyLang(data && data.lang); return done(null, (data && data.notifications) || []); }
           errors.push(base + ' xhr:' + err + ' script:' + err2); next();
         });
       });

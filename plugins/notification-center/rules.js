@@ -8,6 +8,8 @@ var LEVELS = { info: 1, ok: 1, warn: 1, alert: 1 };
 var MODES = { both: 1, banner: 1, full: 1, overlay: 1 };
 // Default wallpapers of the full-screen card, shipped with the Shard as small SVG files (wallpapers/<name>.svg).
 var THEMES = { sport: 1, news: 1 };
+// high: first in the queue, shown even in quiet hours, never merged as a repeat. Anything else is normal.
+var PRIORITIES = { normal: 1, high: 1 };
 // The sounds of the notification-sound Shard (a closed list: a request can only pick one of these names, never a file).
 var SOUNDS = { chime: 1, soft: 1, reward: 1, success: 1, alert: 1, rotation: 1, open: 1, poweron: 1 };
 // WAV files the user uploaded to the TV (names only; the Shard keeps this in step with its folder). A sound is a built-in one or one of these.
@@ -73,6 +75,7 @@ function sanitizeProfile(p, cleanIcon, old) {
         sound: has(p, 'sound') ? (hasSound(p.sound) ? p.sound : '') : (old.sound || ''),
         volume: has(p, 'volume') ? storedVolume(p.volume) : (old.volume || 0),
         theme: has(THEMES, p.theme) ? p.theme : (has(p, 'theme') && !p.theme ? '' : (old.theme || '')),
+        priority: has(p, 'priority') ? (p.priority === 'high' ? 'high' : '') : (old.priority || ''),
         key: old.key || ''
     };
     if (has(p, 'key')) {
@@ -84,7 +87,7 @@ function sanitizeProfile(p, cleanIcon, old) {
 }
 // What GET returns: everything except the key itself.
 function publicProfile(p) {
-    return { enabled: p.enabled !== false, icon: p.icon || '', level: p.level || '', mode: p.mode || '', duration: p.duration || 0, rate: p.rate || 0, sound: p.sound || '', volume: p.volume || 0, theme: p.theme || '', hasKey: !!p.key };
+    return { enabled: p.enabled !== false, icon: p.icon || '', level: p.level || '', mode: p.mode || '', duration: p.duration || 0, rate: p.rate || 0, sound: p.sound || '', volume: p.volume || 0, theme: p.theme || '', priority: p.priority || '', hasKey: !!p.key };
 }
 // Fills in what the sender left out with the source's defaults. The sender's own values always win.
 function applyProfile(body, p) {
@@ -98,6 +101,7 @@ function applyProfile(body, p) {
     if ((out.sound == null || out.sound === '') && p.sound) { out.sound = p.sound; }
     if ((out.volume == null || out.volume === '') && p.volume) { out.volume = p.volume; }
     if ((out.theme == null || out.theme === '') && p.theme) { out.theme = p.theme; }
+    if ((out.priority == null || out.priority === '') && p.priority) { out.priority = p.priority; }
     return out;
 }
 
@@ -182,7 +186,7 @@ function buildFromHook(hook, data) {
 
 module.exports = {
     clampVolume: clampVolume, storedVolume: storedVolume,
-    LEVEL_RANK: LEVEL_RANK, LEVELS: LEVELS, MODES: MODES, THEMES: THEMES, SOUNDS: SOUNDS, CUSTOM: CUSTOM, hasSound: hasSound, MAX_SOURCES: MAX_SOURCES, MAX_HOOKS: MAX_HOOKS, MAX_TEMPLATE: MAX_TEMPLATE, MAX_RATE: MAX_RATE,
+    LEVEL_RANK: LEVEL_RANK, LEVELS: LEVELS, MODES: MODES, THEMES: THEMES, PRIORITIES: PRIORITIES, SOUNDS: SOUNDS, CUSTOM: CUSTOM, hasSound: hasSound, MAX_SOURCES: MAX_SOURCES, MAX_HOOKS: MAX_HOOKS, MAX_TEMPLATE: MAX_TEMPLATE, MAX_RATE: MAX_RATE,
     str: str, num: num, has: has, isObj: isObj,
     cleanSource: cleanSource, cleanHookName: cleanHookName, sameKey: sameKey, KEY_RE: KEY_RE,
     sanitizeProfile: sanitizeProfile, publicProfile: publicProfile, applyProfile: applyProfile, makeLimiter: makeLimiter,

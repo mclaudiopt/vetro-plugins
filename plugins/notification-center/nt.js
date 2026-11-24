@@ -20,8 +20,8 @@
   // Screen shown while the app is open: a One UI style card (EN/PT by the TV language). The banner itself is the TV's native one.
   // The language is a Shard setting (default English); it is applied as soon as the first answer from the Shard arrives.
   var DICT = {
-    en: { wait: 'Notification Center', ready: 'Waiting for notifications', sent: 'Notification sent', back: 'Returning to the previous app in', err: 'Cannot reach the Shard' },
-    pt: { wait: 'Centro de Notifica\u00E7\u00F5es', ready: '\u00C0 espera de avisos', sent: 'Aviso enviado', back: 'A voltar \u00E0 aplica\u00E7\u00E3o anterior em', err: 'Sem liga\u00E7\u00E3o ao Shard' }
+    en: { wait: 'Notification Center', ready: 'Waiting for notifications', sent: 'Notification sent', dismiss: 'Dismiss', back: 'Returning to the previous app in', err: 'Cannot reach the Shard' },
+    pt: { wait: 'Centro de Notifica\u00E7\u00F5es', ready: '\u00C0 espera de avisos', sent: 'Aviso enviado', dismiss: 'Fechar', back: 'A voltar \u00E0 aplica\u00E7\u00E3o anterior em', err: 'Sem liga\u00E7\u00E3o ao Shard' }
   };
   var TX = DICT.en;
   var EMO = { info: '\u2139\uFE0F', ok: '\u2705', warn: '\u26A0\uFE0F', alert: '\uD83D\uDD34' };
@@ -36,7 +36,7 @@
   function iconSvg(level, size) {
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + (ICON_BODY[level] || ICON_BODY.info) + '</svg>';
   }
-  var cardEl = null;
+  var cardEl = null, actBtns = [], actIdx = 0;
   (function buildUi() {
     var st = document.createElement('style');
     st.textContent = 'body{margin:0;background:radial-gradient(circle at 30% 20%,#17203a,#07090f);color:#eef2f9;font-family:SamsungOne,"Segoe UI",sans-serif}' +
@@ -44,7 +44,7 @@
       '#nc h1{font-size:44px;font-weight:600;margin:0 0 8px}#nc p{font-size:28px;color:#8b96ab;margin:0 0 40px}' +
       '#nc .card{display:flex;gap:28px;align-items:center;text-align:left;background:rgba(255,255,255,.08);border-radius:36px;padding:34px 42px;border-left:12px solid var(--c);margin-top:24px}' +
       '#nc .ic{width:96px;height:96px;border-radius:50%;background:var(--c);display:grid;place-items:center;flex:none}' +
-      '#nc .t{font-size:38px;font-weight:600}#nc .m{font-size:30px;color:#c4cde0;margin-top:6px}#log{display:none}';
+      '#nc .t{font-size:38px;font-weight:600}#nc .m{font-size:30px;color:#c4cde0;margin-top:6px}#log{display:none}#nc .acts{display:flex;gap:18px;margin-top:22px}#nc .act{font:inherit;font-size:30px;padding:14px 36px;border-radius:18px;border:3px solid #3a4560;background:rgba(255,255,255,.08);color:#fff}#nc .act:focus{border-color:#5b9bff;background:rgba(61,139,255,.28);outline:none}';
     document.head.appendChild(st);
     cardEl = document.createElement('div'); cardEl.id = 'nc';
     cardEl.innerHTML = '<h1></h1><p></p><div id="ncl"></div>';
@@ -66,31 +66,45 @@
     t.className = 't'; t.textContent = n.title || ''; m.className = 'm'; m.textContent = n.message || '';
     b.appendChild(t); b.appendChild(m);
     if (n.image) {   // optional picture: the Shard fetches it and serves it from its own address (the app may only load declared origins)
-      var im = document.createElement('img'), cap = document.createElement('div');
+      var im = document.createElement('img');
       im.alt = '';
       im.style.cssText = 'max-height:260px;max-width:100%;border-radius:24px;margin-top:16px;display:block';
-      cap.style.cssText = 'font-size:18px;color:#8b96ab;margin-top:8px;word-break:break-all';
-      cap.textContent = 'Image: ' + n.image + ' (fetched by the Shard)';
-      im.onload = function () { cap.textContent += ' - loaded ' + im.naturalWidth + 'x' + im.naturalHeight; };
-      im.onerror = function () { cap.textContent += ' - FAILED to load'; };
+      im.onerror = function () { im.style.display = 'none'; };   // a picture that cannot be fetched is left out
       im.src = (apiGood || BASES[0]) + '/plugins/notification-center/api/img?id=' + encodeURIComponent(n.id);
-      b.appendChild(im); b.appendChild(cap);
+      b.appendChild(im);
     }
     if (n.wallpaper) {   // optional full-screen wallpaper behind the card, darkened so the text stays readable
-      var wsrc = (apiGood || BASES[0]) + '/plugins/notification-center/api/img?kind=wallpaper&id=' + encodeURIComponent(n.id), wcap = document.createElement('div'), pre = new Image();
-      wcap.style.cssText = 'font-size:18px;color:#8b96ab;margin-top:8px;word-break:break-all';
-      wcap.textContent = 'Wallpaper: ' + n.wallpaper + ' (fetched by the Shard)';
-      pre.onload = function () {
-        document.body.style.background = 'linear-gradient(rgba(7,9,15,.5),rgba(7,9,15,.72)), url("' + wsrc + '") center / cover no-repeat fixed';
-        wcap.textContent += ' - loaded ' + pre.naturalWidth + 'x' + pre.naturalHeight;
-      };
-      pre.onerror = function () { wcap.textContent += ' - FAILED to load'; };
+      var wsrc = (apiGood || BASES[0]) + '/plugins/notification-center/api/img?kind=wallpaper&id=' + encodeURIComponent(n.id), pre = new Image();
+      pre.onload = function () { document.body.style.background = 'linear-gradient(rgba(7,9,15,.5),rgba(7,9,15,.72)), url("' + wsrc + '") center / cover no-repeat fixed'; };
       pre.src = wsrc;
-      b.appendChild(wcap);
+    }
+    if (n.action && n.action.label) {   // a button that opens an app, and a Dismiss button; Left and Right move between them, OK presses
+      var row = document.createElement('div'), go = mkBtn(n.action.label, function () { runAction(n); }), no = mkBtn(TX.dismiss, leave);
+      row.className = 'acts'; row.appendChild(go); row.appendChild(no); b.appendChild(row);
+      actBtns = [go, no]; actIdx = 0;
+      setTimeout(function () { try { go.focus(); } catch (e) { /* not focusable yet */ } }, 50);
     }
     d.appendChild(ic); d.appendChild(b);
     var host = document.getElementById('ncl'); host.appendChild(d);
     cardEl.getElementsByTagName('p')[0].textContent = TX.sent;
+  }
+
+  function mkBtn(label, fn) {
+    var x = document.createElement('button');
+    x.type = 'button'; x.className = 'act'; x.textContent = label; x.onclick = fn;
+    return x;
+  }
+  // The button was pressed: the Shard launches the app the notification named, then this screen leaves.
+  function runAction(n) {
+    var done = false;
+    function go() { if (!done) { done = true; leave(); } }
+    try {
+      var x = new XMLHttpRequest();
+      x.open('POST', (apiGood || BASES[0]) + '/plugins/notification-center/api/action?id=' + encodeURIComponent(n.id), true);
+      x.onload = go; x.onerror = go;
+      x.send('');
+    } catch (e) { go(); }
+    setTimeout(go, 1500);
   }
 
   function now() { var d = new Date(); function p(n) { return (n < 10 ? '0' : '') + n; } return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); }
@@ -224,5 +238,9 @@
   setInterval(function () { if (document.visibilityState !== 'hidden') { check('watch'); } }, WATCH_MS);
   document.addEventListener('keydown', function (e) {
     if (e.keyCode === 10009 || e.keyCode === 27) { leave(); }
+    else if ((e.keyCode === 37 || e.keyCode === 39) && actBtns.length) {
+      actIdx = (actIdx + (e.keyCode === 39 ? 1 : -1) + actBtns.length) % actBtns.length;
+      try { actBtns[actIdx].focus(); } catch (x) { /* gone */ }
+    }
   });
 })();

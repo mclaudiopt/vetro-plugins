@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13.0
+- **Priority:** field `priority` (`high`): first in the queue, shown even in quiet hours, never merged as a repeat; a source can have a default priority; ntfy priority 5 is high.
+- **A button on the full-screen card:** field `action` `{app, label?}` adds a button that opens an installed app, next to a Dismiss button (Left/Right and OK on the remote); `POST action?id=` launches the app the notification named. Fields in the panel under More options.
+- The card no longer shows debug text under the picture and the wallpaper.
+
 ## 0.12.0
 - **Copy the setup to another TV:** `GET export` makes one JSON file with the settings, the sources, the webhooks and, if asked, your own sounds and the sender keys; `POST import` loads it on another TV through the same checks as every other route. Settings has "Download the setup file" and "Load a setup file".
 - **Removed the Cast bridge** (`POST cast`, `GET cast`, "Send to all TVs"): it only worked while the TV that sends was on. The separate Cast Shard is not needed by this one any more.

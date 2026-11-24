@@ -517,6 +517,8 @@ module.exports = function (ctx) {
                 app: { type: 'string', note: 'Id of an app installed on the TV (for example 9Ur5IzDKqV.TizenYouTube; GET /apps on Vetro lists them). Its icon is used as the picture when there is no image: the card shows it, the overlay bar uses it as its icon.' },
                 wallpaper: { type: 'url', note: 'http/https full-screen background behind the card. The Shard fetches it. It wins over `theme`.' },
                 theme: { type: 'string', enum: Object.keys(rules.THEMES), note: 'A default wallpaper for the full-screen card, shipped with the Shard (sport or news), used when the request has no `wallpaper`. A source can have its own default theme.' },
+                priority: { type: 'string', enum: Object.keys(rules.PRIORITIES), default: 'normal', note: 'high = first in the queue, shown even in quiet hours and never merged as a repeat. A source can have a default priority. ntfy priority 5 is high.' },
+                action: { type: 'object', note: '{app, label?}: a button on the full-screen card (modes full and both) that opens the installed app with that id; label is up to 24 characters (default Open). The card also has a Dismiss button. The bar and the Samsung banner have no buttons.' },
                 seconds: { type: 'integer', min: MIN_SECONDS, max: MAX_SECONDS, default: DEFAULT_SECONDS, note: 'How long it waits in the queue (always at least duration + 20).' },
                 open: { type: 'boolean', default: true, note: 'false only queues it, without launching the app or its service.' },
                 sound: { type: 'string', enum: soundNames(), note: 'Plays one of the TV system sounds, or one of your own uploaded sounds (see GET sounds, custom), with the notification. Empty = no sound; one sound at most every 0.8 s. Not played for a notification held back by quiet hours or merged as a repeat.' },
@@ -543,6 +545,7 @@ module.exports = function (ctx) {
                 { method: 'POST', path: 'play', summary: 'Play one of the sounds without a notification, or a 10-second tune made of them (song). The sound volume setting applies. Answers 429 if another sound was played less than 0.8 s ago.', body: '{sound, volume?} or {song:"rock"|"fate"|"stop"}', returns: '{ok, sound:"requested"} or {ok, song:"playing"}' },
                 { method: 'POST', path: 'sound-upload?name=<name>', summary: 'Upload one of your own sounds: the raw bytes of a WAV (PCM 16 bit, mono or stereo, 8-48 kHz, at most 10 s and 1 MB) as the body. The name is 1-24 characters of a-z, 0-9 and -, and cannot be a built-in sound; at most 12. Then use the name as `sound`.', returns: '{ok, name, seconds}' },
                 { method: 'POST', path: 'sound-delete', summary: 'Delete one of your own sounds.', body: '{name}', returns: '{ok, deleted}' },
+                { method: 'POST', path: 'action?id=<id>', summary: 'Used by the full-screen card when the button of a notification is pressed: launches the app that notification named in `action` (404 if that notification has no button or is gone, 429 if used less than 2 s ago).', returns: '{ok, app}' },
                 { method: 'GET', path: 'export[?sounds=1][&keys=1]', summary: 'The setup of this Notification Center as one JSON file (settings, sources, webhooks); sounds=1 adds your own sounds, keys=1 adds the keys of the senders (keep that file private). Load it on another TV with POST import.', returns: 'a JSON file ({format, formatVersion, shard, exportedAt, settings, sources, webhooks, sounds})' },
                 { method: 'POST', path: 'import', summary: 'Load a setup file made by GET export: the settings are replaced, sources and webhooks of the same name are replaced and the others are kept, sounds are added. Everything is checked again; what cannot be used is listed in skipped.', body: 'the file, as it is', returns: '{ok, imported:{settings,sources,webhooks,sounds}, skipped:[...]}' },
                 { method: 'GET', path: 'sounds', summary: 'The sounds a request can choose, whether this Shard can play sounds (exec granted), the volume and timing settings, the timing of the last banner sound (trace) and the result of the last attempt.', returns: '{sounds:[...], songs:[{name,title}], available, volume, delayMs, trace, last}' },
@@ -604,6 +607,7 @@ module.exports = function (ctx) {
             // Never loop over something the sender controls: only a real array, or a comma list, and at most 10 entries.
             tags = (Array.isArray(tags) ? tags : str(tags).split(',')).slice(0, 10);
             b.level = p >= 5 ? 'alert' : p === 4 ? 'warn' : 'info';
+            if (p >= 5) { b.priority = 'high'; }
             for (i = 0; i < tags.length; i++) {
                 t = str(tags[i]).trim().toLowerCase();
                 if (has(NTFY_TAGS, t)) {
@@ -742,6 +746,44 @@ module.exports = function (ctx) {
         }, MAX_SETUP_BYTES);
     }
 
+    // A high-priority notification goes to the front, the others to the back. When the queue is full the oldest normal one is dropped (the last one if all are high).
+    function enqueue(note) {
+        if (note.priority === 'high') { queue.unshift(note); } else { queue.push(note); }
+        while (queue.length > MAX_QUEUE) {
+            var i, drop = -1;
+            for (i = 0; i < queue.length; i++) { if (queue[i].priority !== 'high') { drop = i; break; } }
+            queue.splice(drop < 0 ? queue.length - 1 : drop, 1);
+        }
+    }
+    // The button on the full-screen card: the id of an app installed on the TV (a plain id) and a short label. Nothing else is kept.
+    function cleanAction(v) {
+        if (!rules.isObj(v)) { return null; }
+        var app = str(v.app);
+        if (!/^[A-Za-z0-9._-]{1,64}$/.test(app)) { return null; }
+        return { app: app, label: clean(v.label, 24) || 'Open' };
+    }
+    // POST action?id=<id>: the user pressed the button of a notification on the card. The Shard launches the app that notification named (never one the request names now).
+    var lastAction = 0;
+    function handleAction(req, res) {
+        var m = /[?&]id=([^&]+)/.exec(String(req.url || '')), id = '', note = null, i;
+        try { id = m ? decodeURIComponent(m[1]) : ''; } catch (e) { id = ''; }
+        for (i = 0; i < queue.length; i++) { if (queue[i].id === id) { note = queue[i]; } }
+        if (!note || !note.action) { return sendJson(res, 404, { ok: false, error: 'no button for that notification' }); }
+        var now = Date.now();
+        if (now - lastAction < MIN_RELAUNCH_MS) { return sendJson(res, 429, { ok: false, error: 'too soon' }); }
+        lastAction = now;
+        var body = JSON.stringify({ appId: note.action.app });
+        try {
+            var rq = http.request({ host: VHOST, port: VPORT, path: '/apps/launch', method: 'POST', timeout: 5000, headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } }, function (r) { r.resume(); });
+            rq.on('error', function () { /* Vetro busy or no such app */ });
+            rq.setTimeout(5000);
+            rq.on('timeout', function () { rq.destroy(); });
+            rq.write(body);
+            rq.end();
+        } catch (e) { return sendJson(res, 502, { ok: false, error: 'could not reach Vetro' }); }
+        sendJson(res, 200, { ok: true, app: note.action.app });
+    }
+
     function submit(b, headers, res, forcedSource) {
         b = rules.isObj(b) ? b : {};
         {
@@ -768,6 +810,8 @@ module.exports = function (ctx) {
                 image: cleanUrl(b.image) || appIconUrl(b.app),
                 wallpaper: cleanUrl(b.wallpaper) || (has(rules.THEMES, b.theme) ? 'theme:' + b.theme : ''),
                 theme: has(rules.THEMES, b.theme) ? b.theme : '',
+                priority: b.priority === 'high' ? 'high' : '',
+                action: cleanAction(b.action),
                 message: message,
                 level: has(LEVELS, b.level) ? b.level : 'info',
                 mode: has(MODES, b.mode) ? b.mode : 'banner',
@@ -777,16 +821,16 @@ module.exports = function (ctx) {
                 volume: soundVolume(b.volume),
                 expires: Date.now() + secs * 1000
             };
-            var entry = { id: note.id, title: note.title, message: note.message, level: note.level, mode: note.mode, duration: note.duration, icon: note.icon, image: note.image, wallpaper: note.wallpaper, theme: note.theme, source: source, sound: note.sound, volume: note.volume, at: Date.now() };
+            var entry = { id: note.id, title: note.title, message: note.message, level: note.level, mode: note.mode, duration: note.duration, icon: note.icon, image: note.image, wallpaper: note.wallpaper, theme: note.theme, priority: note.priority, action: note.action ? note.action.label : '', source: source, sound: note.sound, volume: note.volume, at: Date.now() };
             // Quiet hours: below the allowed level the notification is only recorded, never shown.
-            if (rules.isQuiet(settings, note.level, new Date())) {
+            if (note.priority !== 'high' && rules.isQuiet(settings, note.level, new Date())) {
                 entry.suppressed = true;
                 recent.unshift(entry); if (recent.length > MAX_RECENT) { recent.pop(); } saveRecent();
                 return sendJson(res, 200, { ok: true, id: note.id, suppressed: 'quiet hours' });
             }
             // Grouping: the same source, title, message and level within the window is counted, not shown again. It is skipped when it is off
             // (groupSeconds 0) and for a request that says group:false (the panel's Resend and test buttons). The map only holds entries younger than the window.
-            if (settings.groupSeconds && b.group !== false) {
+            if (settings.groupSeconds && b.group !== false && note.priority !== 'high') {
                 var sig = [source, note.title, note.message, note.level].join(String.fromCharCode(1)), nowMs = Date.now(), g = has(groups, sig) ? groups[sig] : null, r;
                 if (g && nowMs - g.at < settings.groupSeconds * 1000) {
                     g.count += 1;
@@ -800,8 +844,7 @@ module.exports = function (ctx) {
             // The overlay bar is drawn by the Shard's own helper, so it never goes through the queue the app and the banner service read.
             var isOverlay = note.mode === 'overlay';
             if (!isOverlay) {
-                queue.push(note);
-                if (queue.length > MAX_QUEUE) { queue.shift(); }
+                enqueue(note);
                 writeQueueFile();
             }
             recent.unshift(entry);
@@ -887,6 +930,7 @@ module.exports = function (ctx) {
             if (sub === 'img' && req.method === 'GET') { mark('img', req); serveImage(req, res); return true; }
             if (sub === 'ntfy' && req.method === 'POST') { handleNtfy(req, res); return true; }
             if (sub === 'play' && req.method === 'POST') { handlePlay(req, res); return true; }
+            if (sub === 'action' && req.method === 'POST') { handleAction(req, res); return true; }
             if (sub === 'export' && req.method === 'GET') { handleExport(req, res); return true; }
             if (sub === 'import' && req.method === 'POST') { handleImport(req, res); return true; }
             if (sub === 'sound-upload' && req.method === 'POST') { handleSoundUpload(req, res); return true; }
@@ -908,7 +952,7 @@ module.exports = function (ctx) {
                 prune();
                 var now = Date.now();
                 var out = { lang: getLang(), notifications: queue.map(function (n) {
-                    return { id: n.id, title: n.title, message: n.message, level: n.level, mode: n.mode, duration: n.duration, icon: n.icon, image: n.image, wallpaper: n.wallpaper, seconds: Math.ceil((n.expires - now) / 1000) };
+                    return { id: n.id, title: n.title, message: n.message, level: n.level, mode: n.mode, duration: n.duration, icon: n.icon, image: n.image, wallpaper: n.wallpaper, priority: n.priority, action: n.action ? { label: n.action.label } : null, seconds: Math.ceil((n.expires - now) / 1000) };
                 }) };
                 if (wantsScript(req)) { sendScript(res, out); } else { sendJson(res, 200, out); }
                 return true;

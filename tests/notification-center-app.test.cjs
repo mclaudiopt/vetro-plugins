@@ -186,3 +186,45 @@ test('the language of the screen follows the Shard setting (English by default, 
     env.run();
     assert.match(env.card().getElementsByTagName('h1')[0].textContent, /Centro de Notifica/);
 });
+
+test('a notification with an action shows a button for the app and a Dismiss button; the card has no debug text', () => {
+    const env = makeEnv({queue: [note({id: 'a1', mode: 'full', title: 'Goal', message: 'Sporting 1-0', image: 'http://x/y.png', wallpaper: 'theme:sport', action: {label: 'Open YouTube'}})]});
+    env.run();
+    const buttons = env.body.getElementsByTagName('button');
+    assert.deepEqual(buttons.map(b => b.textContent), ['Open YouTube', 'Dismiss']);
+    const texts = env.cardTexts().join('|');
+    assert.ok(!/fetched by the Shard|Wallpaper:|Image:/.test(texts), 'no debug captions under the picture and the wallpaper');
+});
+
+test('pressing the action button tells the Shard (POST action?id=) and then leaves; Dismiss only leaves', () => {
+    const env = makeEnv({queue: [note({id: 'a2', mode: 'full', action: {label: 'Open'}})]});
+    env.run();
+    const [go] = env.body.getElementsByTagName('button');
+    go.onclick();
+    assert.ok(env.requests.some(u => /\/plugins\/notification-center\/api\/action\?id=a2$/.test(u)));
+    env.advance(2500);
+    assert.equal(env.exits, 1);
+    const env2 = makeEnv({queue: [note({id: 'a3', mode: 'full', action: {label: 'Open'}})]});
+    env2.run();
+    const [, no] = env2.body.getElementsByTagName('button');
+    no.onclick();
+    env2.advance(1000);
+    assert.equal(env2.exits, 1);
+    assert.ok(!env2.requests.some(u => /action\?id=/.test(u)), 'Dismiss does not open anything');
+});
+
+test('Left and Right move between the two buttons; a card without an action has no buttons', () => {
+    const env = makeEnv({queue: [note({id: 'a4', mode: 'full', action: {label: 'Open'}})]});
+    env.run();
+    const focused = [];
+    env.body.getElementsByTagName('button').forEach((b, i) => { b.focus = () => focused.push(i); });
+    env.advance(100);
+    env.fire('keydown', {keyCode: 39});
+    env.fire('keydown', {keyCode: 39});
+    env.fire('keydown', {keyCode: 37});
+    assert.deepEqual(focused, [0, 1, 0, 1]);
+    const plain = makeEnv({queue: [note({id: 'p1', mode: 'full'})]});
+    plain.run();
+    assert.equal(plain.body.getElementsByTagName('button').length, 0);
+    plain.fire('keydown', {keyCode: 39});   // nothing to move: no error
+});

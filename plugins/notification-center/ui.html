@@ -218,7 +218,6 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
         </div>
       </details>
       <div class="foot">
-        <label class="chk" id="castrow" hidden><input type="checkbox" id="castall"> <span data-t="cast_all">Send to all TVs</span> <span id="castcount"></span></label>
         <button class="send" id="send" type="button" data-t="btn">Send</button>
       </div>
       <div class="msg" id="result"></div>
@@ -335,6 +334,14 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
           <div class="msg" style="padding:0 0 8px" data-t="t_custom_note">Add a sound, such as a goal cheer, and choose it by its name when you send a notification.</div>
           <div class="row"><input type="text" id="cname" maxlength="24" data-p="ph_cname" style="flex:1"><input type="file" id="cfile" accept=".wav,audio/wav" style="flex:2"><button type="button" class="ghost" id="cup" data-t="t_upload">Upload</button></div>
           <div class="row" id="clist" style="margin-top:6px"></div>
+          <h3 style="margin-top:26px" data-t="cp_title">Copy this setup to another TV</h3>
+          <div class="msg" style="padding:0 0 8px" data-t="cp_note">Save your settings, senders, webhooks and, if you want, your sounds in one file, then load that file on another TV that has the Notification Center.</div>
+          <label class="chk"><input type="checkbox" id="cp_sounds"> <span data-t="cp_sounds">Include my sounds (the file gets bigger)</span></label>
+          <label class="chk" style="margin-top:6px"><input type="checkbox" id="cp_keys"> <span data-t="cp_keys">Include the keys of the senders (keep the file private)</span></label>
+          <div class="row" style="margin-top:10px"><button type="button" class="send" id="cp_save" data-t="cp_save">Download the setup file</button></div>
+          <div class="lab" style="margin-top:14px" data-t="cp_load">Load a setup file</div>
+          <div class="row"><input type="file" id="cp_file" accept=".json,application/json" style="flex:1"><button type="button" class="ghost" id="cp_up" data-t="cp_up">Load it</button></div>
+          <div class="msg" id="cp_msg" style="padding:8px 0 0"></div>
         </div>
         <div>
           <h3 data-t="set_toast">Bottom toast</h3>
@@ -574,13 +581,6 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
   // The dashboard frame has no allow-forms: use buttons and the Enter key, not <form>.
   $("send").addEventListener("click", function () {
     say(tr("sending"));
-    if ($("castall").checked) {
-      // Cast (optional Shard): the same notification to every TV of the network; this TV is normally one of them, so nothing is also sent locally.
-      act(this, api("cast", { title: $("title").value, message: $("message").value, level: level, icon: $("icon").value, mode: mode, duration: parseInt($("secs").value, 10) || 8 })
-        .then(function (r) { say(tr("cast_done").replace("{n}", r.sent).replace("{m}", r.sent + r.failed), r.failed ? "err" : "ok"); $("message").value = ""; preview(); })
-        .catch(function (e) { say(e.message, "err"); throw e; }));
-      return;
-    }
     act(this, api("notify", { title: $("title").value, message: $("message").value, level: level, icon: $("icon").value, image: $("image").value, app: $("app").value, theme: $("theme").value, wallpaper: $("wallpaper").value, mode: mode, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked, sound: $("sound").value, group: false })
       .then(function (r) { say(r.open === "not requested" ? tr("queuedq") : tr("queued"), "ok"); $("message").value = ""; preview(); recent().catch(function () {}); })
       .catch(function (e) { say(e.message, "err"); throw e; }));
@@ -906,13 +906,46 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     loadSounds();
   })();
 
-  // Cast (optional Shard): "Send to all TVs" is shown only when the Cast Shard is installed on this TV and knows at least one TV.
+  // Copy the setup to another TV: download one file here, load it there.
   (function () {
-    T.en.cast_all = "Send to all TVs"; T.en.cast_done = "Sent to {n} of {m} TVs";
-    T.pt.cast_all = "Enviar a todas as TVs"; T.pt.cast_done = "Enviado a {n} de {m} TVs";
-    api("cast").then(function (d) {
-      if (d.installed && d.tvs > 0) { $("castrow").hidden = false; $("castcount").textContent = "(" + d.tvs + ")"; }
-    }).catch(function () { /* no Cast: the option stays hidden */ });
+    T.en.cp_title = "Copy this setup to another TV"; T.pt.cp_title = "Copiar esta configura\u00E7\u00E3o para outra TV";
+    T.en.cp_note = "Save your settings, senders, webhooks and, if you want, your sounds in one file, then load that file on another TV that has the Notification Center."; T.pt.cp_note = "Guarde as defini\u00E7\u00F5es, os emissores, os webhooks e, se quiser, os seus sons num ficheiro, e carregue esse ficheiro noutra TV que tenha o Centro de Notifica\u00E7\u00F5es.";
+    T.en.cp_sounds = "Include my sounds (the file gets bigger)"; T.pt.cp_sounds = "Incluir os meus sons (o ficheiro fica maior)";
+    T.en.cp_keys = "Include the keys of the senders (keep the file private)"; T.pt.cp_keys = "Incluir as chaves dos emissores (guarde o ficheiro em privado)";
+    T.en.cp_save = "Download the setup file"; T.pt.cp_save = "Descarregar o ficheiro da configura\u00E7\u00E3o";
+    T.en.cp_load = "Load a setup file"; T.pt.cp_load = "Carregar um ficheiro de configura\u00E7\u00E3o";
+    T.en.cp_up = "Load it"; T.pt.cp_up = "Carregar";
+    T.en.cp_none = "Choose a setup file first."; T.pt.cp_none = "Escolha primeiro um ficheiro de configura\u00E7\u00E3o.";
+    T.en.cp_done = "Loaded: {s} sources, {w} webhooks, {n} sounds."; T.pt.cp_done = "Carregado: {s} emissores, {w} webhooks, {n} sons.";
+    T.en.cp_skip = " Not loaded: "; T.pt.cp_skip = " N\u00E3o carregado: ";
+    $("cp_save").addEventListener("click", function () {
+      var url = "export?sounds=" + ($("cp_sounds").checked ? "1" : "0") + "&keys=" + ($("cp_keys").checked ? "1" : "0");
+      act(this, fetch(url).then(function (r) { if (!r.ok) { throw new Error("error " + r.status); } return r.blob(); }).then(function (b) {
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(b); a.download = "notification-center-setup.json";
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+      }).catch(function (e) { $("cp_msg").textContent = e.message; $("cp_msg").className = "msg err"; throw e; }));
+    });
+    $("cp_up").addEventListener("click", function () {
+      var f = $("cp_file").files && $("cp_file").files[0];
+      if (!f) { $("cp_msg").textContent = tr("cp_none"); $("cp_msg").className = "msg err"; return; }
+      act(this, new Promise(function (ok, no) {
+        var r = new FileReader();
+        r.onload = function () {
+          fetch("import", { method: "POST", body: r.result })
+            .then(function (x) { return x.json().then(function (j) { if (!x.ok) { throw new Error(j.error || "error " + x.status); } return j; }); })
+            .then(function (j) {
+              var i = j.imported;
+              $("cp_msg").textContent = tr("cp_done").replace("{s}", i.sources).replace("{w}", i.webhooks).replace("{n}", i.sounds) + (j.skipped.length ? tr("cp_skip") + j.skipped.join(", ") : "");
+              $("cp_msg").className = "msg " + (j.skipped.length ? "err" : "ok"); $("cp_file").value = "";
+              setTimeout(function () { location.reload(); }, j.skipped.length ? 6000 : 1800);
+            }).then(ok, function (e) { $("cp_msg").textContent = e.message; $("cp_msg").className = "msg err"; no(e); });
+        };
+        r.onerror = no;
+        r.readAsArrayBuffer(f);
+      }));
+    });
   })();
 
   applyLang();

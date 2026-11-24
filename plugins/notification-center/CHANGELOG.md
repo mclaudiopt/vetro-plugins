@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.0
+- **Copy the setup to another TV:** `GET export` makes one JSON file with the settings, the sources, the webhooks and, if asked, your own sounds and the sender keys; `POST import` loads it on another TV through the same checks as every other route. Settings has "Download the setup file" and "Load a setup file".
+- **Removed the Cast bridge** (`POST cast`, `GET cast`, "Send to all TVs"): it only worked while the TV that sends was on. The separate Cast Shard is not needed by this one any more.
+
 ## 0.11.0
 - **The panel is organised for everyday use:** five tabs, Send, Try it, Settings, Senders and rules, Technical. Send has two steps (write the message, choose how it looks, with a plain sentence for each way to show it) and keeps the sound, pictures and duration under "More options". Try it has one-click examples (goal alert, breaking news, doorbell, simple message) and the "Is everything working?" check. Settings holds the sound volume and delay, your own sounds, the bottom toast opacity and the quiet hours. Deleting an own sound asks twice.
 - The screen app sources (app/) are the ones of app 0.2.3: it asks the TV for its own address, so the full-screen card works without a local build.

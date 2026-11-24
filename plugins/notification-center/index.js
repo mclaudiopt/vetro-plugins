@@ -333,13 +333,13 @@ module.exports = function (ctx) {
         var secs = dataLen / (fmt.rate * fmt.ch * 2);
         return secs <= MAX_WAV_SECONDS ? { seconds: Math.round(secs * 10) / 10 } : null;
     }
-    function readBinary(req, res, cb) {
-        var chunks = [], n = 0, over = false;
+    function readBinary(req, res, cb, limit) {
+        var chunks = [], n = 0, over = false, max = limit || MAX_WAV_BYTES;
         req.on('data', function (d) {
             if (over) { return; }
             var b = toBuf(d);
             n += b.length;
-            if (n > MAX_WAV_BYTES) { over = true; chunks = []; try { sendJson(res, 413, { error: 'request body too large (a sound is at most 1 MB)' }); } catch (e) { /* already answered */ } return; }
+            if (n > max) { over = true; chunks = []; try { sendJson(res, 413, { error: 'request body too large' }); } catch (e) { /* already answered */ } return; }
             chunks.push(b);
         });
         req.on('end', function () {
@@ -541,10 +541,10 @@ module.exports = function (ctx) {
                 { method: 'POST', path: 'hooks', summary: 'Create, change or delete a webhook.', body: '{name, message (template), title?, level?, icon?, mode?, duration?, source?, delete?}; templates use {{a.b.0.c}} from the posted JSON', returns: '{ok, name, hook, url}' },
                 { method: 'POST', path: 'hook/<name>', summary: 'Send any JSON (up to 64 KB) to a webhook; its templates build the notification. Non-JSON bodies are available as {{text}}.', returns: 'same as notify' },
                 { method: 'POST', path: 'play', summary: 'Play one of the sounds without a notification, or a 10-second tune made of them (song). The sound volume setting applies. Answers 429 if another sound was played less than 0.8 s ago.', body: '{sound, volume?} or {song:"rock"|"fate"|"stop"}', returns: '{ok, sound:"requested"} or {ok, song:"playing"}' },
-                { method: 'POST', path: 'cast', summary: 'Send one notification to every Samsung TV of the network that has the Notification Center, through the optional Cast Shard on this TV. Forwards message, title, icon, level, mode, duration and optionally group or tvIds (sound and images are not forwarded; each TV applies its own settings).', body: '{message, title?, icon?, level?, mode?, duration?, group?, tvIds?}', returns: '{ok, sent, failed, results:[{id,name,ok,error}]}' },
-                { method: 'GET', path: 'cast', summary: 'Is the Cast Shard installed on this TV, how many TVs it knows and which groups.', returns: '{installed, tvs, groups}' },
                 { method: 'POST', path: 'sound-upload?name=<name>', summary: 'Upload one of your own sounds: the raw bytes of a WAV (PCM 16 bit, mono or stereo, 8-48 kHz, at most 10 s and 1 MB) as the body. The name is 1-24 characters of a-z, 0-9 and -, and cannot be a built-in sound; at most 12. Then use the name as `sound`.', returns: '{ok, name, seconds}' },
                 { method: 'POST', path: 'sound-delete', summary: 'Delete one of your own sounds.', body: '{name}', returns: '{ok, deleted}' },
+                { method: 'GET', path: 'export[?sounds=1][&keys=1]', summary: 'The setup of this Notification Center as one JSON file (settings, sources, webhooks); sounds=1 adds your own sounds, keys=1 adds the keys of the senders (keep that file private). Load it on another TV with POST import.', returns: 'a JSON file ({format, formatVersion, shard, exportedAt, settings, sources, webhooks, sounds})' },
+                { method: 'POST', path: 'import', summary: 'Load a setup file made by GET export: the settings are replaced, sources and webhooks of the same name are replaced and the others are kept, sounds are added. Everything is checked again; what cannot be used is listed in skipped.', body: 'the file, as it is', returns: '{ok, imported:{settings,sources,webhooks,sounds}, skipped:[...]}' },
                 { method: 'GET', path: 'sounds', summary: 'The sounds a request can choose, whether this Shard can play sounds (exec granted), the volume and timing settings, the timing of the last banner sound (trace) and the result of the last attempt.', returns: '{sounds:[...], songs:[{name,title}], available, volume, delayMs, trace, last}' },
                 { method: 'GET', path: 'emoji', summary: 'The bundled emoji list used by the icon picker.', returns: '{source, groups, list}' },
                 { method: 'GET', path: 'api', summary: 'This description.', returns: 'JSON' }
@@ -673,54 +673,73 @@ module.exports = function (ctx) {
         return { b: rules.applyProfile(b, profile), source: source, settings: settings };
     }
 
-    // Cast (optional, a separate Shard): one notification to every Samsung TV of the network that has the Notification Center. This Shard only forwards the
-    // fields Cast understands to Cast on the same TV (loopback), after the same sender checks; each TV then applies its own quiet hours, grouping and sources.
-    function vetroJson(method, p, obj, cb) {
-        var body = obj ? JSON.stringify(obj) : null, done = false, limit = 20000;
-        function end(e, c, d) { if (!done) { done = true; cb(e, c, d); } }
-        try {
-            var rq = http.request({ host: VHOST, port: VPORT, path: p, method: method, timeout: limit, headers: body ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } : {} }, function (r) {
-                var chunks = [], n = 0;
-                r.on('data', function (d) { n += d.length; if (n > 65536) { r.destroy(); end(new Error('answer too large')); } else { chunks.push(d); } });
-                r.on('end', function () { var j = null; try { j = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (e) { j = null; } end(null, r.statusCode, j); });
-                r.on('error', function (e) { end(e); });
-            });
-            rq.on('error', function (e) { end(e); });
-            rq.setTimeout(limit);
-            rq.on('timeout', function () { rq.destroy(); end(new Error('timeout')); });
-            if (body) { rq.write(body); }
-            rq.end();
-        } catch (e) { end(e); }
-    }
-    function castInfo(res) {
-        vetroJson('GET', '/plugins/cast/api/state', null, function (err, code, d) {
-            var tvs = !err && code === 200 && d && Array.isArray(d.tvs) ? d.tvs : null, groups = [];
-            if (tvs) { tvs.forEach(function (x) { var g = x && typeof x.group === 'string' ? x.group : ''; if (g && groups.indexOf(g) < 0) { groups.push(g); } }); }
-            sendJson(res, 200, { installed: !!tvs, tvs: tvs ? tvs.length : 0, groups: groups });
+    // ---- copy the setup to another TV ----
+    // GET export gives one JSON file with the settings, the sources, the webhooks and (only if asked) the own sounds and the sender keys;
+    // POST import reads such a file back through the same checks as every other route (nothing is trusted: each part is sanitised again).
+    var SETUP_FORMAT = 'notification-center-setup', MAX_SETUP_BYTES = 12582912;
+    function handleExport(req, res) {
+        var q = String(req.url || ''), withKeys = /[?&]keys=1(&|$)/.test(q), withSounds = /[?&]sounds=1(&|$)/.test(q), c = cfgGet(), ver = '';
+        try { ver = require('./manifest.json').version; } catch (e) { /* manifest not readable */ }
+        var out = { format: SETUP_FORMAT, formatVersion: 1, shard: ver, exportedAt: new Date().toISOString(), keysIncluded: withKeys, settings: settingsNow(), sources: {}, webhooks: c.hooks || {}, sounds: {} };
+        Object.keys(c.profiles || {}).forEach(function (k) {
+            var p = c.profiles[k], pub = rules.publicProfile(p);
+            delete pub.hasKey;
+            if (withKeys && p && p.key) { pub.key = p.key; }
+            out.sources[k] = pub;
         });
+        if (withSounds) {
+            Object.keys(rules.CUSTOM).forEach(function (n) { try { out.sounds[n] = fs.readFileSync(customDir() + '/' + n + '.wav').toString('base64'); } catch (e) { /* gone: left out */ } });
+        }
+        var body = JSON.stringify(out, null, 1);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': 'attachment; filename="notification-center-setup.json"', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+        res.end(body);
     }
-    function handleCast(req, res) {
-        readBodyG(req, res, function (raw) {
-            var b;
-            try { b = JSON.parse(raw); } catch (e) { return sendJson(res, 400, { error: 'invalid JSON' }); }
-            b = rules.isObj(b) ? b : {};
-            var adm = admit(b, req.headers || {}, res);
-            if (!adm) { return; }
-            b = adm.b;
-            var message = clean(b.message, MAX_MESSAGE), dur = num(b.duration), ids = [];
-            if (!message) { return sendJson(res, 400, { error: 'message is required' }); }
-            if (Array.isArray(b.tvIds)) { b.tvIds.slice(0, 20).forEach(function (x) { var v = clean(x, 40); if (v) { ids.push(v); } }); }
-            var out = { message: message, title: clean(b.title, MAX_TITLE), icon: cleanIcon(b.icon), level: has(LEVELS, b.level) ? b.level : 'info', mode: has(MODES, b.mode) ? b.mode : 'banner',
-                duration: dur >= MIN_DURATION ? (dur > MAX_DURATION ? MAX_DURATION : dur) : DEFAULT_DURATION };
-            if (clean(b.group, 24)) { out.group = clean(b.group, 24); }
-            if (ids.length) { out.tvIds = ids; }
-            vetroJson('POST', '/plugins/cast/api/cast', out, function (err, code, d) {
-                if (err || code === 404 || code === 405) { return sendJson(res, 502, { ok: false, error: 'the Cast Shard is not installed or not running on this TV' }); }
-                if (code !== 200 || !d || !Array.isArray(d.results)) { return sendJson(res, code >= 400 && code < 600 ? code : 502, { ok: false, error: str(d && d.error) || 'Cast answered ' + code }); }
-                var okCount = d.results.filter(function (x) { return x && x.ok; }).length;
-                sendJson(res, 200, { ok: true, sent: okCount, failed: d.results.length - okCount, results: d.results.slice(0, 50).map(function (x) { return { id: str(x && x.id), name: str(x && x.name).slice(0, 60), ok: !!(x && x.ok), error: str(x && x.error).slice(0, 120) }; }) });
+    function handleImport(req, res) {
+        readBinary(req, res, function (buf) {
+            var d;
+            try { d = JSON.parse(buf.toString('utf8')); } catch (e) { return sendJson(res, 400, { error: 'not a JSON file' }); }
+            if (!rules.isObj(d) || d.format !== SETUP_FORMAT || d.formatVersion !== 1) { return sendJson(res, 400, { error: 'not a Notification Center setup file' }); }
+            var skipped = [], done = { settings: false, sources: 0, webhooks: 0, sounds: 0 };
+            function short(v) { return str(v).replace(/[^A-Za-z0-9 ._-]/g, '?').slice(0, 32); }
+            // Sounds first, so that sources and webhooks can use them.
+            if (rules.isObj(d.sounds)) {
+                Object.keys(d.sounds).forEach(function (name) {
+                    var wb;
+                    if (!CUSTOM_NAME_RE.test(name) || has(SOUND_FILES, name) || typeof d.sounds[name] !== 'string') { skipped.push('sound ' + short(name)); return; }
+                    if (!has(rules.CUSTOM, name) && Object.keys(rules.CUSTOM).length >= MAX_CUSTOM) { skipped.push('sound ' + name + ' (too many sounds)'); return; }
+                    wb = new Buffer(d.sounds[name], 'base64');
+                    if (!wavInfo(wb)) { skipped.push('sound ' + name + ' (not a WAV the TV can play)'); return; }
+                    try { fs.mkdirSync(customDir()); } catch (e) { /* exists */ }
+                    if (!putFile(customDir() + '/' + name + '.wav', wb)) { skipped.push('sound ' + name + ' (could not save)'); return; }
+                    loadCustom(); done.sounds += 1;
+                });
+            }
+            saveCfg(function (c) {
+                if (rules.isObj(d.settings)) { c.settings = rules.sanitizeSettings(d.settings, c.settings); done.settings = true; }
+                var ps = c.profiles = c.profiles || {}, hs = c.hooks = c.hooks || {};
+                if (rules.isObj(d.sources)) {
+                    Object.keys(d.sources).forEach(function (k) {
+                        var name = rules.cleanSource(k), s;
+                        if (!name) { skipped.push('source ' + short(k)); return; }
+                        if (!has(ps, name) && Object.keys(ps).length >= rules.MAX_SOURCES) { skipped.push('source ' + name + ' (too many sources)'); return; }
+                        s = rules.sanitizeProfile(d.sources[k], cleanIcon, has(ps, name) ? ps[name] : {});
+                        if (s.error) { delete s.error; }   // an invalid key in the file is ignored: the source keeps the key it has (or none)
+                        ps[name] = s; done.sources += 1;
+                    });
+                }
+                if (rules.isObj(d.webhooks)) {
+                    Object.keys(d.webhooks).forEach(function (k) {
+                        var name = rules.cleanHookName(k), h;
+                        if (!name) { skipped.push('webhook ' + short(k)); return; }
+                        if (!has(hs, name) && Object.keys(hs).length >= rules.MAX_HOOKS) { skipped.push('webhook ' + name + ' (too many webhooks)'); return; }
+                        h = rules.sanitizeHook(d.webhooks[k]);
+                        if (!h.message) { skipped.push('webhook ' + name + ' (no message template)'); return; }
+                        hs[name] = h; done.webhooks += 1;
+                    });
+                }
             });
-        });
+            sendJson(res, 200, { ok: true, imported: done, skipped: skipped.slice(0, 50) });
+        }, MAX_SETUP_BYTES);
     }
 
     function submit(b, headers, res, forcedSource) {
@@ -868,8 +887,8 @@ module.exports = function (ctx) {
             if (sub === 'img' && req.method === 'GET') { mark('img', req); serveImage(req, res); return true; }
             if (sub === 'ntfy' && req.method === 'POST') { handleNtfy(req, res); return true; }
             if (sub === 'play' && req.method === 'POST') { handlePlay(req, res); return true; }
-            if (sub === 'cast' && req.method === 'POST') { handleCast(req, res); return true; }
-            if (sub === 'cast' && req.method === 'GET') { castInfo(res); return true; }
+            if (sub === 'export' && req.method === 'GET') { handleExport(req, res); return true; }
+            if (sub === 'import' && req.method === 'POST') { handleImport(req, res); return true; }
             if (sub === 'sound-upload' && req.method === 'POST') { handleSoundUpload(req, res); return true; }
             if (sub === 'sound-delete' && req.method === 'POST') { handleSoundDelete(req, res); return true; }
             if (sub === 'sounds' && req.method === 'GET') { sendJson(res, 200, { sounds: soundNames(), custom: Object.keys(rules.CUSTOM), songs: Object.keys(SONGS).map(function (k) { return { name: k, title: SONGS[k].title }; }), available: soundAvailable(), volume: settingsNow().soundVolume, delayMs: settingsNow().soundDelayMs, trace: soundTrace, last: soundLast }); return true; }

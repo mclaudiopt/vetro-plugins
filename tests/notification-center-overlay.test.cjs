@@ -22,6 +22,7 @@ function start(options = {}) {
         overlay: {dir},
         sound: {gapMs: 0, waitMs: 0, songScale: 0.01}
     };
+    if (options.vetro) ctx.vetro = options.vetro;
     if (options.execute !== null) {
         ctx.execute = cmd => { commands.push(cmd); return Promise.resolve({exit_code: 0, stdout: '', stderr: ''}); };
     }
@@ -161,6 +162,32 @@ test('a PNG image becomes the icon; anything else is ignored and the bar still s
             assert.equal(jobLines(dir)[5], '');
         });
     } finally { server.close(); }
+});
+
+test('app: the icon of an installed app (served by Vetro) becomes the picture; only a plain id is accepted', async () => {
+    const png = tinyPng(), asked = [];
+    const vetro = http.createServer((req, res) => {
+        asked.push(req.url);
+        if (req.url === '/apps/icon?appId=9Ur5IzDKqV.TizenYouTube') { res.writeHead(200, {'Content-Type': 'image/png'}); res.end(png); } else { res.writeHead(404); res.end('{}'); }
+    });
+    await new Promise(r => vetro.listen(0, '127.0.0.1', r));
+    try {
+        await withShard(async (s, commands, dir) => {
+            await call(s, 'POST', 'notify', {message: 'from an app', mode: 'overlay', app: '9Ur5IzDKqV.TizenYouTube', group: false});
+            await wait(300);
+            assert.deepEqual(asked, ['/apps/icon?appId=9Ur5IzDKqV.TizenYouTube']);
+            assert.ok(jobLines(dir)[5].endsWith('icon.png'));
+            assert.deepEqual(fs.readFileSync(path.join(dir, 'icon.png')), png);
+            // not a plain id: nothing is asked of Vetro and the bar still shows, without an icon
+            asked.length = 0;
+            await call(s, 'POST', 'notify', {message: 'bad app', mode: 'overlay', app: '../x?y=1&z', group: false});
+            await call(s, 'POST', 'notify', {message: 'object app', mode: 'overlay', app: {toString: 1}, group: false});
+            await wait(200);
+            assert.deepEqual(asked, []);
+            assert.equal(commands.length, 3);
+            assert.equal(jobLines(dir)[5], '');
+        }, {vetro: {host: '127.0.0.1', port: vetro.address().port}});
+    } finally { vetro.close(); }
 });
 
 test('the helper source is shipped next to the compiled helper', () => {

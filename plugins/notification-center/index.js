@@ -130,6 +130,9 @@ module.exports = function (ctx) {
             keys.sort(function (x, y) { return groups[x].at - groups[y].at; }).slice(0, keys.length - MAX_GROUPS).forEach(function (k) { delete groups[k]; });
         }
     }
+    // `app`: the id of an app installed on the TV (for example 9Ur5IzDKqV.TizenYouTube). Its icon is the picture of the notification when the request has no
+    // `image` of its own: Vetro serves it at /apps/icon (the same bounded download as any picture, PNG only for the overlay bar). Only a plain id is accepted.
+    function appIconUrl(v) { var id = str(v); return /^[A-Za-z0-9._-]{1,64}$/.test(id) ? 'http://' + VHOST + ':' + VPORT + '/apps/icon?appId=' + id : ''; }
     function soundVolume(v) { return rules.clampVolume(v); }
     function settingsNow() { return rules.sanitizeSettings(cfgGet().settings, {}); }
     function clean(text, max) {
@@ -430,7 +433,8 @@ module.exports = function (ctx) {
                 mode: { type: 'string', enum: Object.keys(MODES), default: 'banner', note: 'banner = native Samsung banner over the running app (no app switch); full = full-screen card; both = card and banner; overlay = a bar near the bottom of the screen drawn over the running picture by the Shard\'s own helper (never interrupts it; `level` sets the colour of its stripe, a PNG `image` becomes its icon).' },
                 duration: { type: 'integer', min: MIN_DURATION, max: MAX_DURATION, default: DEFAULT_DURATION, note: 'Seconds on screen.' },
                 icon: { type: 'string', max: MAX_ICON, note: 'One emoji (or an emoji sequence) in front of the title; default by level. Cut at whole emoji, never in the middle of one.' },
-                image: { type: 'url', note: 'http/https picture under the message on the full-screen card. The Shard fetches it.' },
+                image: { type: 'url', note: 'http/https picture under the message on the full-screen card, or the icon of the overlay bar (PNG). The Shard fetches it.' },
+                app: { type: 'string', note: 'Id of an app installed on the TV (for example 9Ur5IzDKqV.TizenYouTube; GET /apps on Vetro lists them). Its icon is used as the picture when there is no image: the card shows it, the overlay bar uses it as its icon.' },
                 wallpaper: { type: 'url', note: 'http/https full-screen background behind the card. The Shard fetches it.' },
                 seconds: { type: 'integer', min: MIN_SECONDS, max: MAX_SECONDS, default: DEFAULT_SECONDS, note: 'How long it waits in the queue (always at least duration + 20).' },
                 open: { type: 'boolean', default: true, note: 'false only queues it, without launching the app or its service.' },
@@ -659,7 +663,7 @@ module.exports = function (ctx) {
                 id: seq + '-' + Date.now().toString(36),
                 title: clean(b.title, MAX_TITLE),
                 icon: cleanIcon(b.icon),
-                image: cleanUrl(b.image),
+                image: cleanUrl(b.image) || appIconUrl(b.app),
                 wallpaper: cleanUrl(b.wallpaper),
                 message: message,
                 level: has(LEVELS, b.level) ? b.level : 'info',

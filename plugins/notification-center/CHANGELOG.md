@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.1
+- New field `app`: the id of an app installed on the TV; its icon (served by Vetro at `/apps/icon`) is the picture of the notification when the request has no `image`, so the overlay bar can show an app's icon without a URL.
+
 ## 0.8.0
 - **A volume below 10 is no longer the maximum:** `volume: 0`, `5` or `-3` is raised to 10 (the quietest), above 100 is lowered to 100, and only a missing or non-numeric volume means the default 100. One rule (`clampVolume` in `rules.js`) for `notify`, `POST play`, sources, webhooks and the `soundVolume` setting (which also accepts text such as `"5"`).
 - At most 8 sounds wait for their banner at once (each waits with a 50 ms timer); a request over that gets `sound: "skipped"` instead of piling up timers.

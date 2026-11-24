@@ -28,6 +28,7 @@ JSON body. Only `message` is required.
 | `message` | string, max 200 | required | The text. |
 | `title` | string, max 40 | empty | Bold line above the message. |
 | `level` | `info` `ok` `warn` `alert` | `info` | Colours the card and the panel; the native banner gets the level's emoji. |
+| `app` | string (an app id) | none | The id of an app installed on the TV, for example `9Ur5IzDKqV.TizenYouTube` (Vetro's `GET /apps` lists them). Its icon is used as the picture when the request has no `image`: the full-screen card shows it, and the `overlay` bar draws it as its icon. Only a plain id (letters, digits, `.`, `_`, `-`, up to 64) is accepted; an unknown app gives no picture and the notification is shown anyway. |
 | `mode` | `banner` `full` `both` `overlay` | `banner` | `banner`: the native Samsung banner over whatever is running, no app switch. `full`: a full-screen card (the companion app comes to the front). `both`: card and banner. `overlay`: a bar near the bottom of the screen drawn **over the running picture** by this Shard's own helper (no app switch, no focus change, the video is never interrupted); `level` sets the colour of its stripe, a PNG `image` becomes its icon, `duration` is how long it stays, and the background opacity is the setting `overlayOpacity`. |
 | `duration` | integer 1-60 | `8` | Seconds on screen. |
 | `icon` | string, max 16 | by level | One emoji (or emoji sequence) in front of the title, e.g. the ball for a goal. Cut at whole emoji only. |

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.4
+- The overlay is called "Bottom toast" in the panel (the test button and the mode picker); the API name of the mode is still `overlay`.
+
 ## 0.8.3
 - The test buttons of the Testing tab are named after what they send: "Default Notification", "Full screen", "Both" and "Bar".
 

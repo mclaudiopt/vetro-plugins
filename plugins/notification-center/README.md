@@ -7,7 +7,7 @@
 Any device on your LAN (PC, phone, script, another Shard, any ntfy client) can `POST` a message to this Shard. By default the TV shows it as a
 **native Samsung banner on top of whatever is running, without opening any app** (the companion app's background service posts it, and it also lands
 in the TV's own notification history). Optionally the message is shown as a **full-screen card**, which brings the companion app to the foreground for
-a few seconds. Everything runs on the TV.
+a few seconds, or as an **overlay bar** near the bottom of the screen, drawn over the running picture without interrupting it (rounded corners, adjustable transparency, an optional icon). Everything runs on the TV.
 
 **API for other apps and Shards:** [API.md](API.md) documents every field, route, limit and example, and `GET /plugins/notification-center/api/api`
 returns the same description as JSON. Apps that already publish to [ntfy](https://ntfy.sh) can point at `POST .../api/ntfy` instead (headers `Title`,
@@ -27,7 +27,7 @@ installation status card.
 
 ## Permissions
 
-`exec`, for **one fixed command** and only to play a sound: `paplay --volume=<integer> /usr/share/feedback/sound/operation/<file>`, where `<file>` is one of eight fixed names of the TV's own system sounds (`chime soft reward success alert rotation open poweron`) and the volume is a clamped integer. A request can only pick a name from that list: no text from a request ever reaches the command, and there is no other use of `exec` in the code (a test checks this). Sounds are never played unless a request asks for one.
+`exec`, for **two fixed commands**: playing a sound and showing the overlay bar (below). The first: `paplay --volume=<integer> /usr/share/feedback/sound/operation/<file>`, where `<file>` is one of eight fixed names of the TV's own system sounds (`chime soft reward success alert rotation open poweron`) and the volume is a clamped integer. A request can only pick a name from that list: no text from a request ever reaches the command, and there is no other use of `exec` in the code (a test checks this). Sounds are never played unless a request asks for one.
 
 ## Commands it runs
 
@@ -36,6 +36,10 @@ installation status card.
 | `paplay --volume=<integer> /usr/share/feedback/sound/operation/<file>.wav` | plays one of the TV's own system sounds when a notification asks for one (`sound`). `<file>` is one of 8 fixed names, the integer is 65536 times the volume you set (10-100 %) times the request's `volume` times 3 (the system sounds are quiet), and nothing else is ever run |
 
 It runs only when a request has a `sound` (or calls `POST play`), at most once every 0.8 s, with an 8 second timeout. The goodie (`POST play` with `song`) runs the same command several times in a row from a fixed list in the code (10 seconds, one song at a time). It is the only use of `exec` in the code, and the tests check the exact shape of every command.
+### The overlay bar
+
+`mode: overlay` runs the Shard's own helper, `dotnet <dir>/ncoverlay.dll --file <dir>/job.txt`, with the TV's `dotnet`. `<dir>` is `/home/owner/share/tmp/ncoverlay`, where the Shard unpacks the helper from `overlay/ncoverlay.dll.b64` (source: `overlay/Overlay.cs`). The text, colour, seconds, opacity and the path of a PNG icon are written into `job.txt`, one value per line, so no request text is ever on a command line. The helper draws a transparent notification-level window (the same kind the Vetro launcher uses), decodes the PNG itself, and exits after the duration. A new bar closes the previous one first (by its pid file, only when `/proc/<pid>/cmdline` contains `ncoverlay`).
+
 ## Network
 
 - **Incoming:** HTTP routes under `/plugins/notification-center/api/` (`notify`, `ntfy`, `notifications`, `img`, `recent`, `lang`, `emoji`, `status`,

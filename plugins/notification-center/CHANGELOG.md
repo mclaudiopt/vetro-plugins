@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0
+- **A volume below 10 is no longer the maximum:** `volume: 0`, `5` or `-3` is raised to 10 (the quietest), above 100 is lowered to 100, and only a missing or non-numeric volume means the default 100. One rule (`clampVolume` in `rules.js`) for `notify`, `POST play`, sources, webhooks and the `soundVolume` setting (which also accepts text such as `"5"`).
+- At most 8 sounds wait for their banner at once (each waits with a 50 ms timer); a request over that gets `sound: "skipped"` instead of piling up timers.
+- The docs now say what the code does (banner mode waits `soundDelayMs`, full and both up to 10 s), and the delay slider goes up to 10000 like the setting.
+- **New mode `overlay`:** a bar near the bottom of the screen, drawn over the running picture by a small native helper (the same kind of window the Vetro launcher uses), so nothing is interrupted and no app is opened. Rounded corners, a stripe coloured by `level`, a title, a two-line message and an optional PNG icon (`image`). Setting `overlayOpacity` (20-100 %) sets the background transparency; the Testing tab has a button and a slider. The sound of an overlay plays at once. `GET status` has `overlay`.
+- The Shard now has two fixed `exec` commands (the sound, and the overlay helper with a job file, never text on a command line). The helper source is `overlay/Overlay.cs` and the compiled helper is `overlay/ncoverlay.dll.b64`.
+
 ## 0.7.1
 - `GET status` has a `screen` block: when the full-screen app last fetched `nt.js`, polled the queue and asked for a picture, and from which address. It shows where a full-screen card stops working (for example with Vetro pairing on).
 
@@ -20,7 +27,7 @@ Follow-ups from the catalog review of 0.3.1 (versions 0.4.0 to 0.6.0 were only p
 
 ## 0.5.0
 - **Sounds are part of this Shard now** (they were a separate notification-sound Shard in 0.4.0, which is no longer needed). The Shard asks for the `exec` permission for exactly one command, `paplay` on a fixed list of the TV's system sounds; the sound is chosen from a closed list and the volume is a clamped integer, so nothing from a request reaches the command. At most one sound every 0.8 s.
-- The sound goes with the banner: it plays when the banner service has shown it (the Shard reads the file the service writes), when the app screen asks for a card, or after 5 s at the latest; with `open: false` at once.
+- The sound goes with the banner: it plays when the banner service has shown it (the Shard reads the file the service writes), when the app screen asks for a card, or after `soundDelayMs` (banner mode, default 3 s) or 10 s at the latest (full and both); with `open: false` at once.
 - `sound` and `volume` on `notify`, ntfy, webhooks and source defaults; routes `GET sounds` and `POST play`; the boost is the setting `soundGain` (100-300 %, default 200) in `POST settings`; `GET status` reports `sound`.
 - Panel: the Testing tab has the boost slider next to the sound tests.
 - Tests with a fake `ctx.execute` that records every command and checks its shape.

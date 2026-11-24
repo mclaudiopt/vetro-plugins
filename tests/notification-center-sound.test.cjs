@@ -91,17 +91,17 @@ test('every command ever run has exactly the fixed shape, whatever the request s
     for (const c of commands) assert.match(c, SHAPE);
 }));
 
-test('the volume is clamped to 10-100 and defaults to 100', () => withShard(async (s, commands) => {
+test('the volume is clamped to 10-100 (below 10 is the quietest) and defaults to 100 only when missing or not a number', () => withShard(async (s, commands) => {
     for (const volume of [500, 3, {toString: 1}, 50]) await call(s, 'POST', 'notify', {message: 'v' + String(Math.random()), sound: 'chime', volume});
     await wait(80);
-    assert.deepEqual(commands.map(c => Number(/--volume=(\d+)/.exec(c)[1])), [vol(100), vol(100), vol(100), vol(50)]);
+    assert.deepEqual(commands.map(c => Number(/--volume=(\d+)/.exec(c)[1])), [vol(100), vol(10), vol(100), vol(50)]);
 }));
 
 test('the sound volume is a setting, 10-100 %, default 100, and scales every sound', () => withShard(async (s, commands) => {
     assert.equal((await call(s, 'GET', 'settings')).json.settings.soundVolume, 100);
     assert.equal((await call(s, 'POST', 'settings', {soundVolume: 40})).json.settings.soundVolume, 40);
     assert.equal((await call(s, 'POST', 'settings', {soundVolume: 1000})).json.settings.soundVolume, 100);
-    assert.equal((await call(s, 'POST', 'settings', {soundVolume: 3})).json.settings.soundVolume, 100, 'below 10 is not a valid volume: the current one is kept');
+    assert.equal((await call(s, 'POST', 'settings', {soundVolume: 3})).json.settings.soundVolume, 10, 'below 10 is raised to 10, never to the maximum');
     await call(s, 'POST', 'settings', {soundVolume: 50});
     assert.equal((await call(s, 'POST', 'settings', {soundVolume: 'x'})).json.settings.soundVolume, 50, 'an invalid value keeps the current one');
     assert.equal((await call(s, 'POST', 'settings', {strict: false})).json.settings.soundVolume, 50, 'other settings keep it');
@@ -218,11 +218,12 @@ test('POST play plays a sound without a notification, and refuses unknown names'
     assert.deepEqual((await call(s, 'GET', 'notifications')).json.notifications, [], 'no notification was queued');
 }));
 
-test('the Shard has no other use of exec: the only command string in the source is the paplay one', () => {
+test('the Shard has no other use of exec: two call sites only, the paplay one and the fixed overlay command', () => {
     const source = fs.readFileSync(path.join(folder, 'index.js'), 'utf8');
     const calls = source.match(/ctx\.execute\(/g) || [];
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 2);
     assert.match(source, /ctx\.execute\('paplay --volume=' \+ v \+ ' ' \+ SOUND_DIR \+ SOUND_FILES\[name\]/);
+    assert.match(source, /ctx\.execute\(cmd, 8000\)/);   // the overlay command, built only from the constant directory (see notification-center-overlay.test.cjs)
     assert.deepEqual(Object.keys(rules.SOUNDS), ['chime', 'soft', 'reward', 'success', 'alert', 'rotation', 'open', 'poweron']);
     assert.ok(!fs.readFileSync(path.join(folder, 'rules.js'), 'utf8').includes('execute'));
 });

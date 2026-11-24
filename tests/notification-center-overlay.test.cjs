@@ -1,0 +1,171 @@
+'use strict';
+// The overlay mode: a bar drawn over the running picture by the Shard's own helper. The Shard unpacks the helper, writes the text into a job file and runs
+// one fixed command; a fake ctx.execute records every command, so these tests also prove that no text from a request can reach it.
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs'), os = require('os'), path = require('path'), http = require('http'), zlib = require('zlib');
+const {EventEmitter} = require('events');
+
+const folder = path.join(__dirname, '../plugins/notification-center');
+const create = require(path.join(folder, 'index.js'));
+const rules = require(path.join(folder, 'rules.js'));
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function start(options = {}) {
+    let config = options.seed || {};
+    const commands = [];
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nc-ovl-'));
+    const ctx = {
+        id: 'notification-center', dir: fs.mkdtempSync(path.join(os.tmpdir(), 'nc-ovl-shard-')),
+        config: {get: () => JSON.parse(JSON.stringify(config)), set: v => { config = JSON.parse(JSON.stringify(v)); }},
+        queueFile: path.join(os.tmpdir(), 'nc-q-' + process.pid + '-' + Math.random().toString(36).slice(2) + '.json'),
+        overlay: {dir},
+        sound: {gapMs: 0, waitMs: 0, songScale: 0.01}
+    };
+    if (options.execute !== null) {
+        ctx.execute = cmd => { commands.push(cmd); return Promise.resolve({exit_code: 0, stdout: '', stderr: ''}); };
+    }
+    const shard = create(ctx);
+    if (shard.start) shard.start();
+    return {shard, commands, dir};
+}
+function call(shard, method, sub, body) {
+    return new Promise((resolve, reject) => {
+        const req = new EventEmitter();
+        req.method = method; req.url = '/' + sub; req.headers = {}; req.destroy = () => {};
+        const res = {writeHead(code) { this.code = code; }, end(text) { let j = null; try { j = JSON.parse(text); } catch (e) { /* not JSON */ } resolve({code: this.code, json: j, text}); }};
+        if (!shard.route(req, res, sub)) return reject(new Error('route not handled: ' + method + ' ' + sub));
+        setImmediate(() => { if (body != null) req.emit('data', Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))); req.emit('end'); });
+    });
+}
+async function withShard(fn, options) {
+    const s = start(options);
+    try { await fn(s.shard, s.commands, s.dir); } finally { if (s.shard.stop) s.shard.stop(); }
+}
+const jobLines = dir => fs.readFileSync(path.join(dir, 'job.txt'), 'utf8').split('\n');
+// A 1x1 PNG (8-bit RGBA), made here so the test needs no file.
+function tinyPng() {
+    const crcTable = [];
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; crcTable[n] = c >>> 0; }
+    const crc = buf => { let c = 0xffffffff; for (const b of buf) c = crcTable[(c ^ b) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+    const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); };
+    const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(1, 0); ihdr.writeUInt32BE(1, 4); ihdr[8] = 8; ihdr[9] = 6;
+    return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(Buffer.from([0, 255, 0, 0, 255]))), chunk('IEND', Buffer.alloc(0))]);
+}
+const COMMAND = /^P=[^ ]+\/pid; if \[ -f \$P \] && grep -q ncoverlay \/proc\/\$\(cat \$P\)\/cmdline 2>\/dev\/null; then kill \$\(cat \$P\) 2>\/dev\/null; fi; \( dotnet [^ ;&|`$"']+\/ncoverlay\.dll --file [^ ;&|`$"']+\/job\.txt >\/dev\/null 2>&1 & echo \$! > \$P \); echo started$/;
+
+test('mode overlay is a known mode in rules and in the self-description', async () => {
+    assert.ok(rules.MODES.overlay);
+    await withShard(async s => {
+        const d = await call(s, 'GET', 'api');
+        assert.ok(d.json.enums.mode.includes('overlay'));
+        assert.match(JSON.stringify(d.json), /overlayOpacity/);
+        const st = await call(s, 'GET', 'status');
+        assert.equal(st.json.overlay, true);
+    });
+});
+
+test('an overlay unpacks the helper, writes the job file and runs one fixed command', () => withShard(async (s, commands, dir) => {
+    const r = await call(s, 'POST', 'notify', {title: 'Doorbell', message: 'Someone is at the door', mode: 'overlay', level: 'warn', duration: 12});
+    assert.equal(r.code, 200);
+    assert.equal(r.json.open, 'requested');
+    await wait(30);
+    assert.equal(commands.length, 1);
+    assert.match(commands[0], COMMAND);
+    // the helper is the one shipped with the Shard
+    const shipped = zlib.gunzipSync(Buffer.from(fs.readFileSync(path.join(folder, 'overlay', 'ncoverlay.dll.b64'), 'ascii'), 'base64'));
+    assert.equal(fs.statSync(path.join(dir, 'ncoverlay.dll')).size, shipped.length);
+    assert.match(fs.readFileSync(path.join(dir, 'ncoverlay.runtimeconfig.json'), 'utf8'), /netcoreapp3\.1/);
+    assert.deepEqual(jobLines(dir).slice(0, 6), ['Doorbell', 'Someone is at the door', 'ffb020', '12', '88', '']);
+}));
+
+test('an overlay never goes through the queue the app and the banner service read, but is recorded', () => withShard(async s => {
+    await call(s, 'POST', 'notify', {message: 'bar only', mode: 'overlay'});
+    const q = await call(s, 'GET', 'notifications');
+    assert.deepEqual(q.json.notifications, []);
+    const rec = await call(s, 'GET', 'recent');
+    assert.equal(rec.json.recent[0].mode, 'overlay');
+}));
+
+test('hostile text only ever lands in the job file, never in the command', () => withShard(async (s, commands, dir) => {
+    const nasty = '$(touch /tmp/pwned); `id` "x" \'y\' & | ; > /tmp/p';
+    await call(s, 'POST', 'notify', {title: nasty, message: nasty + '\nsecond line', mode: 'overlay', group: false});
+    await wait(30);
+    assert.equal(commands.length, 1);
+    assert.match(commands[0], COMMAND);
+    assert.ok(!commands[0].includes('pwned'));
+    const lines = jobLines(dir);
+    assert.ok(lines[0].includes('pwned'));
+    assert.ok(lines[1].includes('second line'));   // a newline in a value cannot add a job line: it became a space
+    assert.equal(lines.length, 7);                 // six values and the final newline
+}));
+
+test('overlayOpacity is a setting (20-100) and goes into the job file', () => withShard(async (s, commands, dir) => {
+    assert.equal((await call(s, 'GET', 'settings')).json.settings.overlayOpacity, 88);
+    assert.equal((await call(s, 'POST', 'settings', {overlayOpacity: 40})).json.settings.overlayOpacity, 40);
+    await call(s, 'POST', 'notify', {message: 'a', mode: 'overlay'});
+    await wait(30);
+    assert.equal(jobLines(dir)[4], '40');
+    // like the other settings: below 20 the previous value stays, above 100 it becomes 100
+    assert.equal((await call(s, 'POST', 'settings', {overlayOpacity: 5})).json.settings.overlayOpacity, 40);
+    assert.equal((await call(s, 'POST', 'settings', {overlayOpacity: 500})).json.settings.overlayOpacity, 100);
+    assert.equal(rules.sanitizeSettings({overlayOpacity: {toString: 1}}, {}).overlayOpacity, 88);
+    assert.equal(rules.sanitizeSettings({}, {}).overlayOpacity, 88);
+}));
+
+test('the sound of an overlay plays at once, next to the bar command', () => withShard(async (s, commands) => {
+    const r = await call(s, 'POST', 'notify', {message: 'ding', mode: 'overlay', sound: 'chime'});
+    assert.equal(r.json.sound, 'requested');
+    await wait(60);
+    assert.equal(commands.length, 2);
+    assert.ok(commands.some(c => /^paplay /.test(c)));
+    assert.ok(commands.some(c => COMMAND.test(c)));
+}));
+
+test('quiet hours, open:false and a missing exec permission show no bar', async () => {
+    const quiet = {settings: {quiet: {enabled: true, from: '00:00', to: '23:59', allow: 'none'}}};
+    await withShard(async (s, commands) => {
+        const r = await call(s, 'POST', 'notify', {message: 'shh', mode: 'overlay'});
+        assert.equal(r.json.suppressed, 'quiet hours');
+        assert.deepEqual(commands, []);
+    }, {seed: quiet});
+    await withShard(async (s, commands) => {
+        const r = await call(s, 'POST', 'notify', {message: 'record only', mode: 'overlay', open: false});
+        assert.equal(r.json.open, 'not requested');
+        assert.deepEqual(commands, []);
+    });
+    await withShard(async s => {
+        const r = await call(s, 'POST', 'notify', {message: 'no exec', mode: 'overlay'});
+        assert.equal(r.code, 200);
+        assert.equal(r.json.open, 'unavailable');
+    }, {execute: null});
+});
+
+test('a PNG image becomes the icon; anything else is ignored and the bar still shows', async () => {
+    const png = tinyPng();
+    const server = http.createServer((req, res) => {
+        if (req.url === '/icon.png') { res.writeHead(200, {'Content-Type': 'image/png'}); res.end(png); } else { res.writeHead(200, {'Content-Type': 'image/gif'}); res.end(Buffer.from('GIF89a' + 'x'.repeat(60))); }
+    });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    const base = 'http://127.0.0.1:' + server.address().port;
+    try {
+        await withShard(async (s, commands, dir) => {
+            await call(s, 'POST', 'notify', {message: 'with icon', mode: 'overlay', image: base + '/icon.png', group: false});
+            await wait(300);
+            assert.equal(commands.length, 1);
+            assert.ok(jobLines(dir)[5].endsWith('icon.png'));
+            assert.deepEqual(fs.readFileSync(path.join(dir, 'icon.png')), png);
+            await call(s, 'POST', 'notify', {message: 'gif icon', mode: 'overlay', image: base + '/other.gif', group: false});
+            await wait(300);
+            assert.equal(commands.length, 2);
+            assert.equal(jobLines(dir)[5], '');
+        });
+    } finally { server.close(); }
+});
+
+test('the helper source is shipped next to the compiled helper', () => {
+    const src = fs.readFileSync(path.join(folder, 'overlay', 'Overlay.cs'), 'utf8');
+    assert.match(src, /--file/);
+    assert.ok(fs.statSync(path.join(folder, 'overlay', 'ncoverlay.dll.b64')).size > 1000);
+    assert.ok(!/Process\.Start|System\.Net|Socket/.test(src), 'the helper starts no processes and opens no sockets');
+});

@@ -234,7 +234,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
             <div><div class="lab" data-t="f_name">Name</div><input type="text" id="s_name" maxlength="32" placeholder="doorbell"></div>
             <div><div class="lab" data-t="f_icon">Icon</div><input type="text" id="s_icon" maxlength="16"></div>
             <div><div class="lab" data-t="f_level">Level</div><select id="s_level"><option value=""></option><option>info</option><option>ok</option><option>warn</option><option>alert</option></select></div>
-            <div><div class="lab" data-t="f_mode">Show as</div><select id="s_mode"><option value=""></option><option>banner</option><option>full</option><option>both</option></select></div>
+            <div><div class="lab" data-t="f_mode">Show as</div><select id="s_mode"><option value=""></option><option>banner</option><option>full</option><option>both</option><option>overlay</option></select></div>
             <div><div class="lab" data-t="f_dur">Duration (s)</div><input type="text" id="s_dur" maxlength="2"></div>
             <div><div class="lab" data-t="f_rate">Max per minute (0 = no limit)</div><input type="text" id="s_rate" maxlength="3"></div>
             <div><div class="lab" data-t="f_sound">Sound</div><select id="s_sound"></select></div>
@@ -285,7 +285,9 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
         <div>
           <h3 data-t="t_show">Test on the TV</h3>
           <div class="msg" style="padding:0 0 8px" data-t="t_show_note">Each button sends a real test notification to the TV.</div>
-          <div class="row"><button type="button" class="ghost" data-stm="banner" data-t="st_tb">Test banner</button><button type="button" class="ghost" data-stm="full" data-t="st_tc">Test card</button><button type="button" class="ghost" data-stm="both" data-t="st_tboth">Test both</button></div>
+          <div class="row"><button type="button" class="ghost" data-stm="banner" data-t="st_tb">Test banner</button><button type="button" class="ghost" data-stm="full" data-t="st_tc">Test card</button><button type="button" class="ghost" data-stm="both" data-t="st_tboth">Test both</button><button type="button" class="ghost" data-stm="overlay" data-t="st_to">Test bar</button></div>
+          <div class="lab" style="margin-top:12px" data-t="f_ovop">Opacity of the bar background (%)</div>
+          <div class="row"><input type="range" id="tovop" min="20" max="100" step="2" value="88" style="flex:1"><b id="tovopv">88%</b></div>
           <div class="msg" id="stmsg" style="padding:8px 0 0"></div>
 
           <h3 style="margin-top:22px" data-t="t_sound">Sounds</h3>
@@ -294,7 +296,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
           <div class="lab" style="margin-top:12px" data-t="f_mvol">Sound volume (%)</div>
           <div class="row"><input type="range" id="tmvol" min="10" max="100" step="5" value="100" style="flex:1"><b id="tmvolv">100%</b></div>
           <div class="lab" style="margin-top:12px" data-t="f_delay">The sound starts this long after the notification is sent (ms)</div>
-          <div class="row"><input type="range" id="tdelay" min="0" max="8000" step="100" value="3000" style="flex:1"><b id="tdelayv">3000 ms</b></div>
+          <div class="row"><input type="range" id="tdelay" min="0" max="10000" step="100" value="3000" style="flex:1"><b id="tdelayv">3000 ms</b></div>
           <div class="msg" style="padding:4px 0 0" data-t="f_delay_note">The banner appears a few seconds after the request. Press "Send a notification with this sound" below and move this slider until the sound and the banner arrive together.</div>
           <div class="lab" style="margin-top:12px" data-t="f_vol">Volume (%)</div>
           <div class="row"><input type="range" id="tvol" min="10" max="100" step="5" value="100" style="flex:1"><b id="tvolv">100%</b></div>
@@ -358,14 +360,14 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     en: { title: "Notification Center", send: "Send a notification", secs: "Show for (s)", open: "Show on TV now", btn: "Send", preview: "Preview",
       prevnote: "The TV shows its own native banner; this is only an approximation.", recent: "Recently sent", refresh: "Refresh", app: "Companion app",
       appnote: "Launches NotifCtr01.NotifCenter (fixed id). It must be installed on the TV, see the README.", curl: "Send from another device",
-      ph_title: "Title (optional)", ph_msg: "Message", st_title: "Status", ph_auto: "\u00cdcone autom\u00e1tico:", pick_title: "Escolher um \u00edcone", close: "Fechar", tab_main: "Notifications", pick_title: "Choose an icon", close: "Close", ph_auto: "Automatic icon:", sec_msg: "Message", sec_pics: "Pictures for the full-screen card", c_app: "App", c_svc: "Banner service", c_pair_on: "Pairing on", c_pair_off: "Pairing off", st_shard: "Notification Center Shard", st_app: "Companion app installed", st_appfix: "Install the .wgt with Apps2Samsung or TV-Store", st_svc: "Banner service installed", st_svcfix: "Reinstall the app (version 0.2 or newer)", st_pair: "Vetro pairing", st_pair_on: "On: other devices need a key", st_pair_off: "Off: any device on the network can send", st_pair_unknown: "Could not tell", st_tb: "Test banner", st_tc: "Test card", st_tboth: "Test both", rq_title: "Request for other apps and Shards", copy: "Copy", api_title: "API", api_try: "Try it", send_btn: "Send", sent_ok: "Sent.",
+      ph_title: "Title (optional)", ph_msg: "Message", st_title: "Status", ph_auto: "\u00cdcone autom\u00e1tico:", pick_title: "Escolher um \u00edcone", close: "Fechar", tab_main: "Notifications", pick_title: "Choose an icon", close: "Close", ph_auto: "Automatic icon:", sec_msg: "Message", sec_pics: "Pictures for the full-screen card", c_app: "App", c_svc: "Banner service", c_pair_on: "Pairing on", c_pair_off: "Pairing off", st_shard: "Notification Center Shard", st_app: "Companion app installed", st_appfix: "Install the .wgt with Apps2Samsung or TV-Store", st_svc: "Banner service installed", st_svcfix: "Reinstall the app (version 0.2 or newer)", st_pair: "Vetro pairing", st_pair_on: "On: other devices need a key", st_pair_off: "Off: any device on the network can send", st_pair_unknown: "Could not tell", st_tb: "Test banner", st_tc: "Test card", st_tboth: "Test both", st_to: "Test bar", f_ovop: "Opacity of the bar background (%)", m_overlay: "Bar over the picture", rq_title: "Request for other apps and Shards", copy: "Copy", api_title: "API", api_try: "Try it", send_btn: "Send", sent_ok: "Sent.",
       ph_wall: "Wallpaper URL, full-screen background (optional)", ph_image: "Image URL for the full-screen card (optional)", ph_icon: "Icon (emoji, optional; default by level)", pick: "Choose icon", noicon: "Level icon", ph_search: "Search icons...", groups: "Smileys,People,Animals,Food,Travel,Activities,Objects,Symbols,Flags", sending: "Sending...", queued: "Sent to the TV", queuedq: "Queued (TV not launched)", none: "Nothing sent yet.", notitle: "Notification",
       info: "Info", ok: "Done", warn: "Warning", alert: "Alert", sample: "Your message appears here", back: "Returning to the previous app in",
       mode: "Show as", m_both: "Both", m_banner: "Samsung banner", m_full: "Full screen", resend: "Resend", resent: "Sent again" },
     pt: { title: "Centro de Notifica\u00E7\u00F5es", send: "Enviar notifica\u00E7\u00E3o", secs: "Mostrar durante (s)", open: "Mostrar na TV agora", btn: "Enviar", preview: "Pr\u00E9-visualiza\u00E7\u00E3o",
       prevnote: "A TV mostra o seu pr\u00F3prio aviso nativo; isto \u00E9 s\u00F3 uma aproxima\u00E7\u00E3o.", recent: "Enviadas recentemente", refresh: "Atualizar", app: "App companheira",
       appnote: "Lan\u00E7a NotifCtr01.NotifCenter (id fixo). Tem de estar instalada na TV, ver o README.", curl: "Enviar a partir de outro dispositivo",
-      ph_title: "T\u00EDtulo (opcional)", ph_msg: "Mensagem", st_title: "Estado", tab_main: "Notifica\u00e7\u00f5es", sec_msg: "Mensagem", sec_pics: "Imagens para o cart\u00e3o de ecr\u00e3 inteiro", c_app: "App", c_svc: "Servi\u00e7o", c_pair_on: "Emparelhamento ligado", c_pair_off: "Emparelhamento desligado", st_shard: "Shard Notification Center", st_app: "App companheira instalada", st_appfix: "Instala o .wgt com o Apps2Samsung ou o TV-Store", st_svc: "Servi\u00E7o de banners instalado", st_svcfix: "Reinstala a app (vers\u00E3o 0.2 ou mais recente)", st_pair: "Emparelhamento do Vetro", st_pair_on: "Ligado: os outros dispositivos precisam de chave", st_pair_off: "Desligado: qualquer dispositivo da rede pode enviar", st_pair_unknown: "N\u00E3o consegui saber", st_tb: "Testar banner", st_tc: "Testar cart\u00E3o", st_tboth: "Testar ambos", rq_title: "Pedido para outras apps e Shards", copy: "Copiar", api_title: "API", api_try: "Experimentar", send_btn: "Enviar", sent_ok: "Enviado.",
+      ph_title: "T\u00EDtulo (opcional)", ph_msg: "Mensagem", st_title: "Estado", tab_main: "Notifica\u00e7\u00f5es", sec_msg: "Mensagem", sec_pics: "Imagens para o cart\u00e3o de ecr\u00e3 inteiro", c_app: "App", c_svc: "Servi\u00e7o", c_pair_on: "Emparelhamento ligado", c_pair_off: "Emparelhamento desligado", st_shard: "Shard Notification Center", st_app: "App companheira instalada", st_appfix: "Instala o .wgt com o Apps2Samsung ou o TV-Store", st_svc: "Servi\u00E7o de banners instalado", st_svcfix: "Reinstala a app (vers\u00E3o 0.2 ou mais recente)", st_pair: "Emparelhamento do Vetro", st_pair_on: "Ligado: os outros dispositivos precisam de chave", st_pair_off: "Desligado: qualquer dispositivo da rede pode enviar", st_pair_unknown: "N\u00E3o consegui saber", st_tb: "Testar banner", st_tc: "Testar cart\u00E3o", st_tboth: "Testar ambos", st_to: "Testar barra", f_ovop: "Opacidade do fundo da barra (%)", m_overlay: "Barra sobre a imagem", rq_title: "Pedido para outras apps e Shards", copy: "Copiar", api_title: "API", api_try: "Experimentar", send_btn: "Enviar", sent_ok: "Enviado.",
       ph_wall: "URL do wallpaper de fundo em ecr\u00E3 inteiro (opcional)", ph_image: "URL da imagem para o cart\u00E3o de ecr\u00E3 inteiro (opcional)", ph_icon: "\u00CDcone (emoji, opcional; por defeito pelo n\u00EDvel)", pick: "Escolher \u00EDcone", noicon: "\u00CDcone do n\u00EDvel", ph_search: "Pesquisar \u00EDcones...", groups: "Smileys,Pessoas,Animais,Comida,Viagens,Atividades,Objetos,S\u00EDmbolos,Bandeiras", sending: "A enviar...", queued: "Enviada para a TV", queuedq: "Em fila (TV n\u00E3o lan\u00E7ada)", none: "Ainda nada enviado.", notitle: "Notifica\u00E7\u00E3o",
       info: "Info", ok: "Conclu\u00EDdo", warn: "Aviso", alert: "Alerta", sample: "A sua mensagem aparece aqui", back: "A voltar \u00E0 aplica\u00E7\u00E3o anterior em",
       mode: "Mostrar como", m_both: "Ambos", m_banner: "Aviso Samsung", m_full: "Ecr\u00E3 inteiro", resend: "Reenviar", resent: "Enviada de novo" }
@@ -407,7 +409,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     }
   }
   function paintModes() {
-    var MODES = ["banner", "full", "both"];
+    var MODES = ["banner", "full", "both", "overlay"];
     $("modes").innerHTML = MODES.map(function (m) {
       return '<button type="button" class="md' + (m === mode ? " on" : "") + '" data-m="' + m + '">' + esc(tr("m_" + m)) + "</button>";
     }).join("");
@@ -424,13 +426,14 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     return iconAt(level, cx - size / 2, cy - size / 2, size);
   }
   // Preview drawn like the Vetro UI overview: the same sunset scene as the TV, with the notification on top.
+  var overlayOp = 88;
   function preview() {
     var c = COLORS[level], ttl = $("title").value || tr("notitle"), msg = $("message").value || tr("sample");
     var dur = parseInt($("secs").value, 10) || 8, h = "";
     var wall = urlOk($("wallpaper").value), pic = urlOk($("image").value);
     var bhead = $("icon").value || LEVEL_EMOJI[level];
     $("icon").placeholder = tr("ph_auto") + " " + LEVEL_EMOJI[level];   // the icon follows the level by itself; type or pick one only to override
-    if (mode !== "banner") {
+    if (mode === "full" || mode === "both") {
       h += '<g class="sc-card">' + (wall ? '<image x="0" y="0" width="1920" height="1080" preserveAspectRatio="xMidYMid slice" href="' + esc(/^https?:\/\/[^\s"'<>]+$/.test(wall) ? wall : "") + '"/>' : "") +
         '<rect width="1920" height="1080" fill="#07090f" fill-opacity="' + (wall ? ".6" : ".55") + '"/>' +
         '<rect x="360" y="330" width="1200" height="310" rx="64" fill="#fff" fill-opacity=".1"/><rect x="360" y="330" width="18" height="310" rx="9" fill="' + c + '"/>' +
@@ -441,12 +444,19 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
         '<text x="960" y="745" text-anchor="middle" font-size="36" fill="#8b96ab">' + esc(tr("back")) + '</text>' +
         '<text x="960" y="900" text-anchor="middle" font-size="160" font-weight="700" fill="#fff">' + dur + "</text></g>";
     }
-    if (mode !== "full") {
+    if (mode === "banner" || mode === "both") {
       h += '<g class="sc-banner"><rect x="1236" y="60" width="628" height="196" rx="44" fill="#fff" fill-opacity=".22"/><rect x="1238" y="62" width="624" height="192" rx="42" fill="#243448" fill-opacity=".94"/>' +
         '<rect x="1268" y="96" width="88" height="88" rx="24" fill="#4a6cf7"/><text x="1312" y="154" text-anchor="middle" font-size="52">\uD83D\uDD14</text>' +
         '<text x="1380" y="132" font-size="32" font-weight="600" fill="#fff">' + esc(cut(bhead + " " + ttl, 24)) + "</text>" +
         '<text x="1380" y="172" font-size="26" fill="#fff" fill-opacity=".75">' + esc(cut(msg, 30)) + "</text>" +
         '<text x="1380" y="226" font-size="24" font-weight="600" fill="#8fbaff">OK</text><text x="1470" y="226" font-size="24" fill="#8fbaff">View history</text></g>';
+    }
+    if (mode === "overlay") {
+      var oh = 56 + (ttl ? 58 : 0) + (msg ? 58 : 0), ot = 1080 - 90 - oh;
+      h += '<g class="sc-banner"><rect x="160" y="' + ot + '" width="1600" height="' + oh + '" rx="36" fill="#0a0c12" fill-opacity="' + (overlayOp / 100) + '"/>' +
+        '<rect x="182" y="' + (ot + 20) + '" width="12" height="' + (oh - 40) + '" rx="6" fill="' + c + '"/>' +
+        '<text x="218" y="' + (ot + 74) + '" font-size="46" fill="#fff">' + esc(cut(ttl, 40)) + "</text>" +
+        '<text x="218" y="' + (ot + 130) + '" font-size="38" fill="#d6deee">' + esc(cut(msg, 66)) + "</text></g>";
     }
     $("dyn").innerHTML = h;
     paintReq();
@@ -784,7 +794,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     function loadSounds() {
       return api("sounds").then(function (d) {
         names = d.sounds; installed = d.available; songs = d.songs || [];
-        showVolume(d.volume); $("tdelay").value = d.delayMs; $("tdelayv").textContent = d.delayMs + " ms";
+        showVolume(d.volume); api("settings").then(function (s) { overlayOp = s.settings.overlayOpacity; $("tovop").value = overlayOp; $("tovopv").textContent = overlayOp + "%"; preview(); }).catch(function () { /* keep */ }); $("tdelay").value = d.delayMs; $("tdelayv").textContent = d.delayMs + " ms";
         paintSounds(); paintSongs();
       }).catch(function () { /* keep the lists empty */ });
     }
@@ -793,6 +803,8 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
       $(id).addEventListener("input", function () { showVolume(this.value); });
       $(id).addEventListener("change", function () { api("settings", { soundVolume: parseInt(this.value, 10) }).then(function (r) { showVolume(r.settings.soundVolume); }).catch(function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; }); });
     });
+    $("tovop").addEventListener("input", function () { overlayOp = parseInt(this.value, 10); $("tovopv").textContent = this.value + "%"; preview(); });
+    $("tovop").addEventListener("change", function () { api("settings", { overlayOpacity: parseInt(this.value, 10) }).catch(function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; }); });
     $("tdelay").addEventListener("input", function () { $("tdelayv").textContent = this.value + " ms"; });
     $("tdelay").addEventListener("change", function () { api("settings", { soundDelayMs: parseInt(this.value, 10) }).catch(function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; }); });
     $("tsongstop").addEventListener("click", function () { act(this, api("play", { song: "stop" })); });

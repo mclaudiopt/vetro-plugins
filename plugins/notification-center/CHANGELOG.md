@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.3
+- The test buttons of the Testing tab are named after what they send: "Default Notification", "Full screen", "Both" and "Bar".
+
+## 0.8.2
+- The top tabs of the panel are rounded buttons (dark, the open one lighter with a blue border), the same look as the Alerts Shard.
+
 ## 0.8.1
 - New field `app`: the id of an app installed on the TV; its icon (served by Vetro at `/apps/icon`) is the picture of the notification when the request has no `image`, so the overlay bar can show an app's icon without a URL.
 

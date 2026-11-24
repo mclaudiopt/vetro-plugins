@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.13.2
+- Try it: "Simulate a goal for a club" has a button for Sporting, Benfica, Porto and Feyenoord, each with the crest and the colour of the club, as the Match alerts sends them (replaces the two single examples of 0.13.1).
+
 ## 0.13.1
 - Try it: the goal example uses one of the system sounds (a beep) instead of the own sound, and there are two new examples, a Sporting goal and a Benfica goal, each with the crest of the club and its colour, to see the logo change.
 

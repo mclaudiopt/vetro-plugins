@@ -27,7 +27,7 @@ installation status card.
 
 ## Permissions
 
-`exec`, for **two fixed commands**: playing a sound and showing the overlay bar (below). The first: `paplay --volume=<integer> /usr/share/feedback/sound/operation/<file>`, where `<file>` is one of eight fixed names of the TV's own system sounds (`chime soft reward success alert rotation open poweron`) and the volume is a clamped integer. A request can only pick a name from that list: no text from a request ever reaches the command, and there is no other use of `exec` in the code (a test checks this). Sounds are never played unless a request asks for one.
+`exec`, for **two fixed commands**: playing a sound (one of the eight system sounds, or a WAV you uploaded to the Shard's own sound folder on the TV, chosen by a validated name) and showing the overlay bar (below). The first: `paplay --volume=<integer> /usr/share/feedback/sound/operation/<file>`, where `<file>` is one of eight fixed names of the TV's own system sounds (`chime soft reward success alert rotation open poweron`) and the volume is a clamped integer. A request can only pick a name from that list: no text from a request ever reaches the command, and there is no other use of `exec` in the code (a test checks this). Sounds are never played unless a request asks for one.
 
 ## Commands it runs
 

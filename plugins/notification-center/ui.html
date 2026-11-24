@@ -294,6 +294,9 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
           <h3 style="margin-top:22px" data-t="t_sound">Sounds</h3>
           <div class="msg" id="tsoundnote" style="padding:0 0 8px"></div>
           <div class="row" id="tsounds"></div>
+          <div class="lab" style="margin-top:14px" data-t="t_custom">Your own sounds (WAV, up to 10 s and 1 MB)</div>
+          <div class="row"><input type="text" id="cname" maxlength="24" data-p="ph_cname" style="flex:1"><input type="file" id="cfile" accept=".wav,audio/wav" style="flex:2"><button type="button" class="ghost" id="cup" data-t="t_upload">Upload</button></div>
+          <div class="row" id="clist" style="margin-top:6px"></div>
           <div class="lab" style="margin-top:12px" data-t="f_mvol">Sound volume (%)</div>
           <div class="row"><input type="range" id="tmvol" min="10" max="100" step="5" value="100" style="flex:1"><b id="tmvolv">100%</b></div>
           <div class="lab" style="margin-top:12px" data-t="f_delay">The sound starts this long after the notification is sent (ms)</div>
@@ -359,7 +362,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     en: { title: "Notification Center", send: "Send a notification", secs: "Show for (s)", open: "Show on TV now", btn: "Send", preview: "Preview",
       prevnote: "The TV shows its own native banner; this is only an approximation.", recent: "Recently sent", refresh: "Refresh", app: "Companion app",
       appnote: "Launches NotifCtr01.NotifCenter (fixed id). It must be installed on the TV, see the README.", curl: "Send from another device",
-      ph_title: "Title (optional)", ph_msg: "Message", st_title: "Status", ph_auto: "\u00cdcone autom\u00e1tico:", pick_title: "Escolher um \u00edcone", close: "Fechar", tab_main: "Notifications", pick_title: "Choose an icon", close: "Close", ph_auto: "Automatic icon:", sec_msg: "Message", sec_pics: "Pictures for the full-screen card", c_app: "App", c_svc: "Banner service", c_pair_on: "Pairing on", c_pair_off: "Pairing off", st_shard: "Notification Center Shard", st_app: "Companion app installed", st_appfix: "Install the .wgt with Apps2Samsung or TV-Store", st_svc: "Banner service installed", st_svcfix: "Reinstall the app (version 0.2 or newer)", st_pair: "Vetro pairing", st_pair_on: "On: other devices need a key", st_pair_off: "Off: any device on the network can send", st_pair_unknown: "Could not tell", st_tb: "Default Notification", st_tc: "Full screen", st_tboth: "Both", st_to: "Bottom toast", th_none: "Default wallpaper: none", th_sport: "Sport wallpaper", th_news: "News wallpaper", f_theme: "Default wallpaper", f_ovop: "Opacity of the bar background (%)", m_overlay: "Bottom toast", rq_title: "Request for other apps and Shards", copy: "Copy", api_title: "API", api_try: "Try it", send_btn: "Send", sent_ok: "Sent.",
+      ph_title: "Title (optional)", ph_msg: "Message", st_title: "Status", ph_auto: "\u00cdcone autom\u00e1tico:", pick_title: "Escolher um \u00edcone", close: "Fechar", tab_main: "Notifications", pick_title: "Choose an icon", close: "Close", ph_auto: "Automatic icon:", sec_msg: "Message", sec_pics: "Pictures for the full-screen card", c_app: "App", c_svc: "Banner service", c_pair_on: "Pairing on", c_pair_off: "Pairing off", st_shard: "Notification Center Shard", st_app: "Companion app installed", st_appfix: "Install the .wgt with Apps2Samsung or TV-Store", st_svc: "Banner service installed", st_svcfix: "Reinstall the app (version 0.2 or newer)", st_pair: "Vetro pairing", st_pair_on: "On: other devices need a key", st_pair_off: "Off: any device on the network can send", st_pair_unknown: "Could not tell", st_tb: "Default Notification", st_tc: "Full screen", st_tboth: "Both", st_to: "Bottom toast", t_custom: "Your own sounds (WAV, up to 10 s and 1 MB)", t_upload: "Upload", t_cbad: "Give the sound a name (a-z, 0-9 and -) and choose a WAV file.", t_cok: "Sound uploaded.", ph_cname: "Name, e.g. goal", th_none: "Default wallpaper: none", th_sport: "Sport wallpaper", th_news: "News wallpaper", f_theme: "Default wallpaper", f_ovop: "Opacity of the bar background (%)", m_overlay: "Bottom toast", rq_title: "Request for other apps and Shards", copy: "Copy", api_title: "API", api_try: "Try it", send_btn: "Send", sent_ok: "Sent.",
       ph_app: "App id whose icon is the picture (optional, e.g. 9Ur5IzDKqV.TizenYouTube)",
       ph_wall: "Wallpaper URL, full-screen background (optional)", ph_image: "Image URL for the full-screen card (optional)", ph_icon: "Icon (emoji, optional; default by level)", pick: "Choose icon", noicon: "Level icon", ph_search: "Search icons...", groups: "Smileys,People,Animals,Food,Travel,Activities,Objects,Symbols,Flags", sending: "Sending...", queued: "Sent to the TV", queuedq: "Queued (TV not launched)", none: "Nothing sent yet.", notitle: "Notification",
       info: "Info", ok: "Done", warn: "Warning", alert: "Alert", sample: "Your message appears here", back: "Returning to the previous app in",
@@ -367,7 +370,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     pt: { title: "Centro de Notifica\u00E7\u00F5es", send: "Enviar notifica\u00E7\u00E3o", secs: "Mostrar durante (s)", open: "Mostrar na TV agora", btn: "Enviar", preview: "Pr\u00E9-visualiza\u00E7\u00E3o",
       prevnote: "A TV mostra o seu pr\u00F3prio aviso nativo; isto \u00E9 s\u00F3 uma aproxima\u00E7\u00E3o.", recent: "Enviadas recentemente", refresh: "Atualizar", app: "App companheira",
       appnote: "Lan\u00E7a NotifCtr01.NotifCenter (id fixo). Tem de estar instalada na TV, ver o README.", curl: "Enviar a partir de outro dispositivo",
-      ph_title: "T\u00EDtulo (opcional)", ph_msg: "Mensagem", st_title: "Estado", tab_main: "Notifica\u00e7\u00f5es", sec_msg: "Mensagem", sec_pics: "Imagens para o cart\u00e3o de ecr\u00e3 inteiro", c_app: "App", c_svc: "Servi\u00e7o", c_pair_on: "Emparelhamento ligado", c_pair_off: "Emparelhamento desligado", st_shard: "Shard Notification Center", st_app: "App companheira instalada", st_appfix: "Instala o .wgt com o Apps2Samsung ou o TV-Store", st_svc: "Servi\u00E7o de banners instalado", st_svcfix: "Reinstala a app (vers\u00E3o 0.2 ou mais recente)", st_pair: "Emparelhamento do Vetro", st_pair_on: "Ligado: os outros dispositivos precisam de chave", st_pair_off: "Desligado: qualquer dispositivo da rede pode enviar", st_pair_unknown: "N\u00E3o consegui saber", st_tb: "Notifica\u00E7\u00E3o normal", st_tc: "Ecr\u00E3 inteiro", st_tboth: "Ambos", st_to: "Toast em baixo", th_none: "Wallpaper por defeito: nenhum", th_sport: "Wallpaper de desporto", th_news: "Wallpaper de not\u00EDcias", f_theme: "Wallpaper por defeito", f_ovop: "Opacidade do fundo da barra (%)", m_overlay: "Toast em baixo", rq_title: "Pedido para outras apps e Shards", copy: "Copiar", api_title: "API", api_try: "Experimentar", send_btn: "Enviar", sent_ok: "Enviado.",
+      ph_title: "T\u00EDtulo (opcional)", ph_msg: "Mensagem", st_title: "Estado", tab_main: "Notifica\u00e7\u00f5es", sec_msg: "Mensagem", sec_pics: "Imagens para o cart\u00e3o de ecr\u00e3 inteiro", c_app: "App", c_svc: "Servi\u00e7o", c_pair_on: "Emparelhamento ligado", c_pair_off: "Emparelhamento desligado", st_shard: "Shard Notification Center", st_app: "App companheira instalada", st_appfix: "Instala o .wgt com o Apps2Samsung ou o TV-Store", st_svc: "Servi\u00E7o de banners instalado", st_svcfix: "Reinstala a app (vers\u00E3o 0.2 ou mais recente)", st_pair: "Emparelhamento do Vetro", st_pair_on: "Ligado: os outros dispositivos precisam de chave", st_pair_off: "Desligado: qualquer dispositivo da rede pode enviar", st_pair_unknown: "N\u00E3o consegui saber", st_tb: "Notifica\u00E7\u00E3o normal", st_tc: "Ecr\u00E3 inteiro", st_tboth: "Ambos", st_to: "Toast em baixo", t_custom: "Os seus sons (WAV, at\u00E9 10 s e 1 MB)", t_upload: "Carregar", t_cbad: "D\u00EA um nome ao som (a-z, 0-9 e -) e escolha um ficheiro WAV.", t_cok: "Som carregado.", ph_cname: "Nome, ex.: golo", th_none: "Wallpaper por defeito: nenhum", th_sport: "Wallpaper de desporto", th_news: "Wallpaper de not\u00EDcias", f_theme: "Wallpaper por defeito", f_ovop: "Opacidade do fundo da barra (%)", m_overlay: "Toast em baixo", rq_title: "Pedido para outras apps e Shards", copy: "Copiar", api_title: "API", api_try: "Experimentar", send_btn: "Enviar", sent_ok: "Enviado.",
       ph_app: "Id da app cujo \u00EDcone \u00E9 a imagem (opcional, ex.: 9Ur5IzDKqV.TizenYouTube)",
       ph_wall: "URL do wallpaper de fundo em ecr\u00E3 inteiro (opcional)", ph_image: "URL da imagem para o cart\u00E3o de ecr\u00E3 inteiro (opcional)", ph_icon: "\u00CDcone (emoji, opcional; por defeito pelo n\u00EDvel)", pick: "Escolher \u00EDcone", noicon: "\u00CDcone do n\u00EDvel", ph_search: "Pesquisar \u00EDcones...", groups: "Smileys,Pessoas,Animais,Comida,Viagens,Atividades,Objetos,S\u00EDmbolos,Bandeiras", sending: "A enviar...", queued: "Enviada para a TV", queuedq: "Em fila (TV n\u00E3o lan\u00E7ada)", none: "Ainda nada enviado.", notitle: "Notifica\u00E7\u00E3o",
       info: "Info", ok: "Conclu\u00EDdo", warn: "Aviso", alert: "Alerta", sample: "A sua mensagem aparece aqui", back: "A voltar \u00E0 aplica\u00E7\u00E3o anterior em",
@@ -773,6 +776,14 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
       $("tsounds").innerHTML = names.map(function (n) { return '<button type="button" class="ghost' + (n === chosen ? " on" : "") + '" data-snd="' + esc(n) + '">' + esc(n) + "</button>"; }).join("");
       $("tsoundnote").textContent = installed === false ? tr("t_missing") : (installed ? tr("t_pick") : "");
       $("tsoundnote").className = "msg" + (installed === false ? " err" : "");
+      $("clist").innerHTML = custom.map(function (n) { return '<button type="button" class="ghost" data-del="' + esc(n) + '">' + "\u2715 " + esc(n) + "</button>"; }).join("");
+      var d2 = $("clist").getElementsByTagName("button"), k;
+      for (k = 0; k < d2.length; k++) {
+        d2[k].addEventListener("click", function () {
+          var btn = this;
+          act(btn, api("sound-delete", { name: btn.getAttribute("data-del") }).then(function () { return loadSounds(); }));
+        });
+      }
       var b = $("tsounds").getElementsByTagName("button"), i;
       for (i = 0; i < b.length; i++) {
         b[i].addEventListener("click", function () {
@@ -781,7 +792,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
         });
       }
     }
-    var songs = [];
+    var songs = [], custom = [];
     function paintSongs() {
       $("tsongs").innerHTML = songs.map(function (s) { return '<button type="button" class="ghost" data-song="' + esc(s.name) + '">♪ ' + esc(s.title) + "</button>"; }).join("");
       var b = $("tsongs").getElementsByTagName("button"), i;
@@ -796,7 +807,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     function showVolume(v) { ["mvol", "tmvol"].forEach(function (id) { $(id).value = v; }); $("mvolv").textContent = v + "%"; $("tmvolv").textContent = v + "%"; }
     function loadSounds() {
       return api("sounds").then(function (d) {
-        names = d.sounds; installed = d.available; songs = d.songs || [];
+        names = d.sounds; custom = d.custom || []; installed = d.available; songs = d.songs || [];
         showVolume(d.volume); api("settings").then(function (s) { overlayOp = s.settings.overlayOpacity; $("tovop").value = overlayOp; $("tovopv").textContent = overlayOp + "%"; preview(); }).catch(function () { /* keep */ }); $("tdelay").value = d.delayMs; $("tdelayv").textContent = d.delayMs + " ms";
         paintSounds(); paintSongs();
       }).catch(function () { /* keep the lists empty */ });
@@ -810,6 +821,21 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     $("tovop").addEventListener("change", function () { api("settings", { overlayOpacity: parseInt(this.value, 10) }).catch(function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; }); });
     $("tdelay").addEventListener("input", function () { $("tdelayv").textContent = this.value + " ms"; });
     $("tdelay").addEventListener("change", function () { api("settings", { soundDelayMs: parseInt(this.value, 10) }).catch(function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; }); });
+    $("cup").addEventListener("click", function () {
+      var f = $("cfile").files && $("cfile").files[0], n = $("cname").value.trim().toLowerCase();
+      if (!f || !/^[a-z0-9][a-z0-9-]{0,23}$/.test(n)) { $("tsmsg").textContent = tr("t_cbad"); $("tsmsg").className = "msg err"; return; }
+      act(this, new Promise(function (ok, no) {
+        var r = new FileReader();
+        r.onload = function () {
+          fetch("sound-upload?name=" + encodeURIComponent(n), { method: "POST", body: r.result })
+            .then(function (x) { return x.json().then(function (j) { if (!x.ok) { throw new Error(j.error || "error " + x.status); } return j; }); })
+            .then(function () { $("tsmsg").textContent = tr("t_cok"); $("tsmsg").className = "msg ok"; $("cfile").value = ""; return loadSounds(); })
+            .then(ok, function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; no(e); });
+        };
+        r.onerror = no;
+        r.readAsArrayBuffer(f);
+      }));
+    });
     $("tsongstop").addEventListener("click", function () { act(this, api("play", { song: "stop" })); });
     $("tsend").addEventListener("click", function () {
       if (!chosen) { $("tsmsg").textContent = tr("t_none"); $("tsmsg").className = "msg err"; return; }

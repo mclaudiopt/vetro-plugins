@@ -31,6 +31,8 @@ var SOUND_BOOST = 3;
 var SEEN_FILE = '/tmp/notification-center-seen.json', SOUND_WAIT_MS = 10000, SOUND_POLL_MS = 50, MAX_WAITING_SOUNDS = 8;   // at most 8 sounds wait for their banner at once; more are skipped
 // The TV's system sounds a request can choose (the names are the closed list in rules.js).
 var SOUND_FILES = { chime: 'normal_noti.wav', soft: 'select.wav', reward: 'vi_reward.wav', success: 'vi_success.wav', alert: 'vi_fail.wav', rotation: 'p_rotation_fail.wav', open: 'home_open.wav', poweron: 'power_on.wav' };
+// Your own sounds: WAV files uploaded through the panel or POST sound-upload, kept in CUSTOM_DIR on the TV. Only names matching CUSTOM_NAME_RE that are files in that folder can be played.
+var CUSTOM_DIR = '/home/owner/share/tmp/nc-sounds', CUSTOM_NAME_RE = /^[a-z0-9][a-z0-9-]{0,23}$/, MAX_CUSTOM = 12, MAX_WAV_BYTES = 1048576, MAX_WAV_SECONDS = 10;
 var MAX_TITLE = 40, MAX_MESSAGE = 200, MAX_QUEUE = 5, MAX_RECENT = 20, MAX_BODY = 8192, MAX_ICON = 16;
 var DEFAULT_SECONDS = 30, MIN_SECONDS = 5, MAX_SECONDS = 300, MIN_RELAUNCH_MS = 2000, APP_ACTIVE_MS = 3500;
 // The banner service reads the queue from this file, so it needs no network and no Vetro key (it still works with pairing on).
@@ -237,7 +239,7 @@ module.exports = function (ctx) {
     // The sound comes from a closed list and the volume is a clamped integer, so no text from a request ever reaches the command.
     // At most one sound every 0.8 s (a flood of requests cannot make the TV play a flood of sounds).
     function playSound(name, volume) {
-        if (typeof name !== 'string' || !has(SOUND_FILES, name)) { return 'none'; }
+        if (typeof name !== 'string' || !rules.hasSound(name)) { return 'none'; }
         var now = Date.now();
         if (now - soundAt < SOUND_GAP_MS) { return 'skipped'; }
         soundAt = now;
@@ -246,7 +248,7 @@ module.exports = function (ctx) {
     // The only place that runs a command.
     function execSound(name, volume, now) {
         var v = Math.round(65536 * (volume >= 10 && volume <= 100 ? volume : 100) / 100 * settingsNow().soundVolume / 100 * SOUND_BOOST), job;
-        try { job = ctx.execute('paplay --volume=' + v + ' ' + SOUND_DIR + SOUND_FILES[name], 8000); } catch (e) { soundLast = { at: now, ok: false, error: 'exec failed' }; return 'requested'; }
+        try { job = ctx.execute('paplay --volume=' + v + ' ' + (has(SOUND_FILES, name) ? SOUND_DIR + SOUND_FILES[name] : customDir() + '/' + name + '.wav'), 8000); } catch (e) { soundLast = { at: now, ok: false, error: 'exec failed' }; return 'requested'; }
         if (!job || typeof job.then !== 'function') { soundLast = { at: now, ok: false, error: 'exec unavailable' }; return 'requested'; }
         job.then(function (r) {
             soundLast = r && r.exit_code ? { at: now, ok: false, error: 'paplay exit ' + r.exit_code + (r.stderr ? ': ' + str(r.stderr).slice(0, 120) : '') } : { at: now, ok: true };
@@ -303,6 +305,74 @@ module.exports = function (ctx) {
     }
     function cancelSounds() { Object.keys(waitingSounds).forEach(function (id) { var e = waitingSounds[id]; e.done = true; clearTimeout(e.timer); }); waitingSounds = {}; }
     function soundAvailable() { return typeof ctx.execute === 'function'; }
+
+    // ---- your own sounds ----
+    function customDir() { var d = ctx.sound && ctx.sound.dir; return typeof d === 'string' && /^[A-Za-z0-9_:\\\/.-]+$/.test(d) && d.charAt(0) !== '-' ? d : CUSTOM_DIR; }
+    function soundNames() { return Object.keys(rules.SOUNDS).concat(Object.keys(rules.CUSTOM)); }
+    // Keeps rules.CUSTOM in step with the folder: only well-named .wav files, never a name of a built-in sound.
+    function loadCustom() {
+        var list = [];
+        try { list = fs.readdirSync(customDir()); } catch (e) { list = []; }
+        Object.keys(rules.CUSTOM).forEach(function (k) { delete rules.CUSTOM[k]; });
+        list.sort().forEach(function (f) {
+            var m = /^([a-z0-9][a-z0-9-]{0,23})\.wav$/.exec(f);
+            if (m && !has(SOUND_FILES, m[1]) && Object.keys(rules.CUSTOM).length < MAX_CUSTOM) { rules.CUSTOM[m[1]] = 1; }
+        });
+    }
+    // A WAV the TV's paplay can surely play: PCM, 16 bit, mono or stereo, 8-48 kHz, short. Returns {seconds} or null.
+    function wavInfo(b) {
+        if (!b || b.length < 44 || b.length > MAX_WAV_BYTES || b.toString('ascii', 0, 4) !== 'RIFF' || b.toString('ascii', 8, 12) !== 'WAVE') { return null; }
+        var pos = 12, fmt = null, dataLen = -1, id, len;
+        while (pos + 8 <= b.length) {
+            id = b.toString('ascii', pos, pos + 4); len = b.readUInt32LE(pos + 4);
+            if (id === 'fmt ' && len >= 16 && pos + 24 <= b.length) { fmt = { f: b.readUInt16LE(pos + 8), ch: b.readUInt16LE(pos + 10), rate: b.readUInt32LE(pos + 12), bits: b.readUInt16LE(pos + 22) }; }
+            else if (id === 'data') { dataLen = Math.min(len, b.length - pos - 8); break; }
+            pos += 8 + len + (len & 1);
+        }
+        if (!fmt || dataLen <= 0 || fmt.f !== 1 || fmt.ch < 1 || fmt.ch > 2 || fmt.bits !== 16 || fmt.rate < 8000 || fmt.rate > 48000) { return null; }
+        var secs = dataLen / (fmt.rate * fmt.ch * 2);
+        return secs <= MAX_WAV_SECONDS ? { seconds: Math.round(secs * 10) / 10 } : null;
+    }
+    function readBinary(req, res, cb) {
+        var chunks = [], n = 0, over = false;
+        req.on('data', function (d) {
+            if (over) { return; }
+            var b = toBuf(d);
+            n += b.length;
+            if (n > MAX_WAV_BYTES) { over = true; chunks = []; try { sendJson(res, 413, { error: 'request body too large (a sound is at most 1 MB)' }); } catch (e) { /* already answered */ } return; }
+            chunks.push(b);
+        });
+        req.on('end', function () {
+            if (over) { return; }
+            try { cb(Buffer.concat(chunks)); } catch (e) { try { sendJson(res, 500, { error: 'internal error' }); } catch (e2) { /* answered */ } }
+        });
+    }
+    function handleSoundUpload(req, res) {
+        var m = /[?&]name=([^&]*)/.exec(String(req.url || '')), name = '';
+        try { name = m ? decodeURIComponent(m[1]) : ''; } catch (e) { name = ''; }
+        if (!CUSTOM_NAME_RE.test(name) || has(SOUND_FILES, name)) { return sendJson(res, 400, { error: 'name: 1-24 characters, a-z, 0-9 and -, and not the name of a built-in sound' }); }
+        if (!has(rules.CUSTOM, name) && Object.keys(rules.CUSTOM).length >= MAX_CUSTOM) { return sendJson(res, 400, { error: 'at most ' + MAX_CUSTOM + ' own sounds: delete one first' }); }
+        readBinary(req, res, function (buf) {
+            var info = wavInfo(buf);
+            if (!info) { return sendJson(res, 400, { error: 'not a WAV the TV can play: PCM 16 bit, mono or stereo, 8-48 kHz, at most ' + MAX_WAV_SECONDS + ' s and 1 MB' }); }
+            var dir = customDir();
+            try { fs.mkdirSync(dir); } catch (e) { /* exists */ }
+            if (!putFile(dir + '/' + name + '.wav', buf)) { return sendJson(res, 500, { error: 'could not save the file' }); }
+            loadCustom();
+            sendJson(res, 200, { ok: true, name: name, seconds: info.seconds });
+        });
+    }
+    function handleSoundDelete(req, res) {
+        readBodyG(req, res, function (raw) {
+            var b;
+            try { b = JSON.parse(raw); } catch (e) { return sendJson(res, 400, { error: 'invalid JSON' }); }
+            var name = rules.isObj(b) ? str(b.name) : '';
+            if (!has(rules.CUSTOM, name)) { return sendJson(res, 404, { error: 'no own sound with that name' }); }
+            try { fs.unlinkSync(customDir() + '/' + name + '.wav'); } catch (e) { /* already gone */ }
+            loadCustom();
+            sendJson(res, 200, { ok: true, deleted: name });
+        });
+    }
 
     // ---- overlay bar ----
     // The helper is unpacked once into OVERLAY_DIR (again only if the file is missing or its size differs). The text goes into job.txt, one value per line,
@@ -434,7 +504,7 @@ module.exports = function (ctx) {
             name: 'notification-center', version: ver, apiVersion: 1,
             base: '/plugins/notification-center/api/',
             auth: 'Same as the rest of Vetro: no key with pairing off; with pairing on, other devices send "Authorization: Bearer <key>". Shards on the same TV call http://127.0.0.1:8099 and need no key.',
-            enums: { level: Object.keys(LEVELS), mode: Object.keys(MODES), sound: Object.keys(rules.SOUNDS) },
+            enums: { level: Object.keys(LEVELS), mode: Object.keys(MODES), sound: soundNames() },
             limits: { title: MAX_TITLE, message: MAX_MESSAGE, queue: MAX_QUEUE, recent: MAX_RECENT, durationSeconds: [MIN_DURATION, MAX_DURATION], queueSeconds: [MIN_SECONDS, MAX_SECONDS], image: '3 MB, png/jpeg/gif/webp/bmp, http(s) URL up to 290 characters', relaunchAfterSeconds: MIN_RELAUNCH_MS / 1000 },
             fields: {
                 message: { type: 'string', required: true, max: MAX_MESSAGE, note: 'The text of the notification.' },
@@ -449,7 +519,7 @@ module.exports = function (ctx) {
                 theme: { type: 'string', enum: Object.keys(rules.THEMES), note: 'A default wallpaper for the full-screen card, shipped with the Shard (sport or news), used when the request has no `wallpaper`. A source can have its own default theme.' },
                 seconds: { type: 'integer', min: MIN_SECONDS, max: MAX_SECONDS, default: DEFAULT_SECONDS, note: 'How long it waits in the queue (always at least duration + 20).' },
                 open: { type: 'boolean', default: true, note: 'false only queues it, without launching the app or its service.' },
-                sound: { type: 'string', enum: Object.keys(rules.SOUNDS), note: 'Plays one of the TV system sounds with the notification. Empty = no sound; one sound at most every 0.8 s. Not played for a notification held back by quiet hours or merged as a repeat.' },
+                sound: { type: 'string', enum: soundNames(), note: 'Plays one of the TV system sounds, or one of your own uploaded sounds (see GET sounds, custom), with the notification. Empty = no sound; one sound at most every 0.8 s. Not played for a notification held back by quiet hours or merged as a repeat.' },
                 volume: { type: 'integer', min: 10, max: 100, default: 100, note: 'Volume of the sound, in percent.' },
                 group: { type: 'boolean', default: true, note: 'false = never merge this notification with an identical recent one (the panel sends false for Resend and the test buttons). Merging only happens while the setting groupSeconds is above 0.' },
                 source: { type: 'string', max: 32, note: 'Who is sending (a-z, 0-9, . _ -), or the header X-NC-Source. If a profile with that name exists, its icon, level, mode and duration fill in what you leave out, and its key (header X-NC-Key), enabled flag and rate limit apply.' }
@@ -473,6 +543,8 @@ module.exports = function (ctx) {
                 { method: 'POST', path: 'play', summary: 'Play one of the sounds without a notification, or a 10-second tune made of them (song). The sound volume setting applies. Answers 429 if another sound was played less than 0.8 s ago.', body: '{sound, volume?} or {song:"rock"|"fate"|"stop"}', returns: '{ok, sound:"requested"} or {ok, song:"playing"}' },
                 { method: 'POST', path: 'cast', summary: 'Send one notification to every Samsung TV of the network that has the Notification Center, through the optional Cast Shard on this TV. Forwards message, title, icon, level, mode, duration and optionally group or tvIds (sound and images are not forwarded; each TV applies its own settings).', body: '{message, title?, icon?, level?, mode?, duration?, group?, tvIds?}', returns: '{ok, sent, failed, results:[{id,name,ok,error}]}' },
                 { method: 'GET', path: 'cast', summary: 'Is the Cast Shard installed on this TV, how many TVs it knows and which groups.', returns: '{installed, tvs, groups}' },
+                { method: 'POST', path: 'sound-upload?name=<name>', summary: 'Upload one of your own sounds: the raw bytes of a WAV (PCM 16 bit, mono or stereo, 8-48 kHz, at most 10 s and 1 MB) as the body. The name is 1-24 characters of a-z, 0-9 and -, and cannot be a built-in sound; at most 12. Then use the name as `sound`.', returns: '{ok, name, seconds}' },
+                { method: 'POST', path: 'sound-delete', summary: 'Delete one of your own sounds.', body: '{name}', returns: '{ok, deleted}' },
                 { method: 'GET', path: 'sounds', summary: 'The sounds a request can choose, whether this Shard can play sounds (exec granted), the volume and timing settings, the timing of the last banner sound (trace) and the result of the last attempt.', returns: '{sounds:[...], songs:[{name,title}], available, volume, delayMs, trace, last}' },
                 { method: 'GET', path: 'emoji', summary: 'The bundled emoji list used by the icon picker.', returns: '{source, groups, list}' },
                 { method: 'GET', path: 'api', summary: 'This description.', returns: 'JSON' }
@@ -567,7 +639,7 @@ module.exports = function (ctx) {
                 var played = playSong(b.song);
                 return sendJson(res, played === 'busy' ? 409 : 200, played === 'busy' ? { ok: false, error: 'a song is already playing (song: "stop" stops it)' } : { ok: true, song: played });
             }
-            if (!has(rules.SOUNDS, b.sound)) { return sendJson(res, 400, { error: 'sound must be one of: ' + Object.keys(rules.SOUNDS).join(', ') }); }
+            if (!rules.hasSound(b.sound)) { return sendJson(res, 400, { error: 'sound must be one of: ' + soundNames().join(', ') }); }
             var st = playSound(b.sound, soundVolume(b.volume));
             sendJson(res, st === 'skipped' ? 429 : 200, st === 'skipped' ? { ok: false, error: 'too soon: one sound every 0.8 s' } : { ok: true, sound: st });
         });
@@ -682,7 +754,7 @@ module.exports = function (ctx) {
                 mode: has(MODES, b.mode) ? b.mode : 'banner',
                 duration: dur,
                 source: source,
-                sound: has(rules.SOUNDS, b.sound) ? b.sound : '',
+                sound: rules.hasSound(b.sound) ? b.sound : '',
                 volume: soundVolume(b.volume),
                 expires: Date.now() + secs * 1000
             };
@@ -784,7 +856,7 @@ module.exports = function (ctx) {
     }
 
     return {
-        start: function () {},
+        start: function () { loadCustom();},
         stop: function () { abortFetches(); cancelSounds(); stopSong(); queue = []; writeQueueFile(); },
         status: function () { prune(); return { queued: queue.length, appId: appId() }; },
         route: function (req, res, sub) {
@@ -798,7 +870,9 @@ module.exports = function (ctx) {
             if (sub === 'play' && req.method === 'POST') { handlePlay(req, res); return true; }
             if (sub === 'cast' && req.method === 'POST') { handleCast(req, res); return true; }
             if (sub === 'cast' && req.method === 'GET') { castInfo(res); return true; }
-            if (sub === 'sounds' && req.method === 'GET') { sendJson(res, 200, { sounds: Object.keys(rules.SOUNDS), songs: Object.keys(SONGS).map(function (k) { return { name: k, title: SONGS[k].title }; }), available: soundAvailable(), volume: settingsNow().soundVolume, delayMs: settingsNow().soundDelayMs, trace: soundTrace, last: soundLast }); return true; }
+            if (sub === 'sound-upload' && req.method === 'POST') { handleSoundUpload(req, res); return true; }
+            if (sub === 'sound-delete' && req.method === 'POST') { handleSoundDelete(req, res); return true; }
+            if (sub === 'sounds' && req.method === 'GET') { sendJson(res, 200, { sounds: soundNames(), custom: Object.keys(rules.CUSTOM), songs: Object.keys(SONGS).map(function (k) { return { name: k, title: SONGS[k].title }; }), available: soundAvailable(), volume: settingsNow().soundVolume, delayMs: settingsNow().soundDelayMs, trace: soundTrace, last: soundLast }); return true; }
             if (sub === 'profiles' && (req.method === 'GET' || req.method === 'POST')) { handleProfiles(req, res); return true; }
             if (sub === 'settings' && (req.method === 'GET' || req.method === 'POST')) { handleSettings(req, res); return true; }
             if (sub === 'hooks' && (req.method === 'GET' || req.method === 'POST')) { handleHooks(req, res); return true; }

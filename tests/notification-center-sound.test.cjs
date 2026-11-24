@@ -222,7 +222,7 @@ test('the Shard has no other use of exec: two call sites only, the paplay one an
     const source = fs.readFileSync(path.join(folder, 'index.js'), 'utf8');
     const calls = source.match(/ctx\.execute\(/g) || [];
     assert.equal(calls.length, 2);
-    assert.match(source, /ctx\.execute\('paplay --volume=' \+ v \+ ' ' \+ SOUND_DIR \+ SOUND_FILES\[name\]/);
+    assert.match(source, /ctx\.execute\('paplay --volume=' \+ v \+ ' ' \+ \(has\(SOUND_FILES, name\) \? SOUND_DIR \+ SOUND_FILES\[name\] : customDir\(\) \+ '\/' \+ name \+ '\.wav'\), 8000\)/);   // a system file, or a file of the own-sounds folder named by a validated name
     assert.match(source, /ctx\.execute\(cmd, 8000\)/);   // the overlay command, built only from the constant directory (see notification-center-overlay.test.cjs)
     assert.deepEqual(Object.keys(rules.SOUNDS), ['chime', 'soft', 'reward', 'success', 'alert', 'rotation', 'open', 'poweron']);
     assert.ok(!fs.readFileSync(path.join(folder, 'rules.js'), 'utf8').includes('execute'));

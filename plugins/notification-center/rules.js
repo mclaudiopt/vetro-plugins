@@ -10,6 +10,9 @@ var MODES = { both: 1, banner: 1, full: 1, overlay: 1 };
 var THEMES = { sport: 1, news: 1 };
 // The sounds of the notification-sound Shard (a closed list: a request can only pick one of these names, never a file).
 var SOUNDS = { chime: 1, soft: 1, reward: 1, success: 1, alert: 1, rotation: 1, open: 1, poweron: 1 };
+// WAV files the user uploaded to the TV (names only; the Shard keeps this in step with its folder). A sound is a built-in one or one of these.
+var CUSTOM = {};
+function hasSound(n) { return has(SOUNDS, n) || has(CUSTOM, n); }
 var SOURCE_RE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
 var HOOK_RE = /^[a-z0-9][a-z0-9-]{0,23}$/;
 var KEY_RE = /^[A-Za-z0-9._~-]{8,64}$/;
@@ -67,7 +70,7 @@ function sanitizeProfile(p, cleanIcon, old) {
         mode: has(MODES, p.mode) ? p.mode : (has(p, 'mode') && !p.mode ? '' : (old.mode || '')),
         duration: has(p, 'duration') ? clampInt(p.duration, 1, 60, 0) : (old.duration || 0),
         rate: has(p, 'rate') ? clampInt(p.rate, 0, MAX_RATE, 0) : (old.rate || 0),
-        sound: has(p, 'sound') ? (has(SOUNDS, p.sound) ? p.sound : '') : (old.sound || ''),
+        sound: has(p, 'sound') ? (hasSound(p.sound) ? p.sound : '') : (old.sound || ''),
         volume: has(p, 'volume') ? storedVolume(p.volume) : (old.volume || 0),
         theme: has(THEMES, p.theme) ? p.theme : (has(p, 'theme') && !p.theme ? '' : (old.theme || '')),
         key: old.key || ''
@@ -162,7 +165,7 @@ function sanitizeHook(h) {
     return {
         title: t(h.title), message: t(h.message), level: t(h.level, 40), icon: t(h.icon, 40),
         mode: has(MODES, h.mode) ? h.mode : '', duration: clampInt(h.duration, 1, 60, 0), source: cleanSource(h.source),
-        sound: has(SOUNDS, h.sound) ? h.sound : '', volume: storedVolume(h.volume)
+        sound: hasSound(h.sound) ? h.sound : '', volume: storedVolume(h.volume)
     };
 }
 // Builds the notify body from a hook definition and the posted data.
@@ -179,7 +182,7 @@ function buildFromHook(hook, data) {
 
 module.exports = {
     clampVolume: clampVolume, storedVolume: storedVolume,
-    LEVEL_RANK: LEVEL_RANK, LEVELS: LEVELS, MODES: MODES, THEMES: THEMES, SOUNDS: SOUNDS, MAX_SOURCES: MAX_SOURCES, MAX_HOOKS: MAX_HOOKS, MAX_TEMPLATE: MAX_TEMPLATE, MAX_RATE: MAX_RATE,
+    LEVEL_RANK: LEVEL_RANK, LEVELS: LEVELS, MODES: MODES, THEMES: THEMES, SOUNDS: SOUNDS, CUSTOM: CUSTOM, hasSound: hasSound, MAX_SOURCES: MAX_SOURCES, MAX_HOOKS: MAX_HOOKS, MAX_TEMPLATE: MAX_TEMPLATE, MAX_RATE: MAX_RATE,
     str: str, num: num, has: has, isObj: isObj,
     cleanSource: cleanSource, cleanHookName: cleanHookName, sameKey: sameKey, KEY_RE: KEY_RE,
     sanitizeProfile: sanitizeProfile, publicProfile: publicProfile, applyProfile: applyProfile, makeLimiter: makeLimiter,

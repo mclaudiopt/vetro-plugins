@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.10.0
+- **Your own sounds:** upload a WAV (panel, Testing tab, or `POST sound-upload?name=<name>`) and use its name as `sound`, next to the eight system sounds. Checked on upload (WAV, PCM 16 bit, at most 10 s and 1 MB, at most 12), stored in a fixed folder on the TV and played by the same `paplay` command; a name is 1-24 characters of a-z, 0-9 and -. `GET sounds` has `custom`; `POST sound-delete` removes one.
+
 ## 0.9.0
 - **Default wallpapers:** new field `theme` (`sport` or `news`) picks a small SVG wallpaper shipped with the Shard for the full-screen card; a `wallpaper` URL still wins. A source can have its own default theme, and the panel has a selector in the Notifications form and in Sources and rules.
 

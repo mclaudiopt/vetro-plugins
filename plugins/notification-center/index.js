@@ -430,7 +430,7 @@ module.exports = function (ctx) {
                 message: { type: 'string', required: true, max: MAX_MESSAGE, note: 'The text of the notification.' },
                 title: { type: 'string', max: MAX_TITLE },
                 level: { type: 'string', enum: Object.keys(LEVELS), default: 'info', note: 'Colours the card and the panel; the native banner shows the level emoji.' },
-                mode: { type: 'string', enum: Object.keys(MODES), default: 'banner', note: 'banner = native Samsung banner over the running app (no app switch); full = full-screen card; both = card and banner; overlay = a bar near the bottom of the screen drawn over the running picture by the Shard\'s own helper (never interrupts it; `level` sets the colour of its stripe, a PNG `image` becomes its icon).' },
+                mode: { type: 'string', enum: Object.keys(MODES), default: 'banner', note: 'banner = native Samsung banner over the running app (no app switch); full = full-screen card; both = card and banner; overlay = the bottom toast: a bar near the bottom of the screen drawn over the running picture by the Shard\'s own helper (never interrupts it; `level` sets the colour of its stripe, a PNG `image` becomes its icon).' },
                 duration: { type: 'integer', min: MIN_DURATION, max: MAX_DURATION, default: DEFAULT_DURATION, note: 'Seconds on screen.' },
                 icon: { type: 'string', max: MAX_ICON, note: 'One emoji (or an emoji sequence) in front of the title; default by level. Cut at whole emoji, never in the middle of one.' },
                 image: { type: 'url', note: 'http/https picture under the message on the full-screen card, or the icon of the overlay bar (PNG). The Shard fetches it.' },

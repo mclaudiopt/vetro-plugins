@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.5
+- Everything technical is in one tab, "Technical": the status and the companion app, the request examples for other apps and Shards, and the API. The descriptions of the overlay say "bottom toast" too.
+
 ## 0.8.4
 - The overlay is called "Bottom toast" in the panel (the test button and the mode picker); the API name of the mode is still `overlay`.
 

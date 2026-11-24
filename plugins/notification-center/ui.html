@@ -170,9 +170,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     <button type="button" class="on" data-pane="p-main" data-t="tab_main">Notifications</button>
     <button type="button" data-pane="p-rules" data-t="rules_tab">Sources and rules</button>
     <button type="button" data-pane="p-test" data-t="test_tab">Testing</button>
-    <button type="button" data-pane="p-req" data-t="rq_title">Request for other apps and Shards</button>
-    <button type="button" data-pane="p-api" data-t="api_title">API</button>
-    <button type="button" data-pane="p-app" data-t="app">Companion app</button>
+    <button type="button" data-pane="p-tech" data-t="tech_tab">Technical</button>
   </nav>
 
   <main class="layout" id="p-main">
@@ -317,18 +315,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
         </div>
       </div>
     </div>
-    <div class="pane" id="p-req" hidden>
-      <div class="tabs" id="reqtabs"></div>
-      <pre id="reqcode"></pre>
-      <div class="row" style="margin-top:10px"><button type="button" class="ghost" id="reqcopy" data-t="copy">Copy</button></div>
-    </div>
-    <div class="pane" id="p-api" hidden>
-      <div class="msg" id="apiver" style="padding:0 0 8px"></div>
-      <table class="api"><thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Meaning</th></tr></thead><tbody id="apifields"></tbody></table>
-      <ul id="apiroutes"></ul>
-      <div class="msg" style="padding:8px 0 0">API.md</div>
-    </div>
-    <div class="pane" id="p-app" hidden>
+    <div class="pane" id="p-tech" hidden>
       <div class="appcols">
         <div>
           <h3 data-t="st_title">Status</h3>
@@ -341,6 +328,15 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
           <pre id="curl"></pre>
         </div>
       </div>
+      <h3 style="margin-top:26px" data-t="rq_title">Request for other apps and Shards</h3>
+      <div class="tabs" id="reqtabs"></div>
+      <pre id="reqcode"></pre>
+      <div class="row" style="margin-top:10px"><button type="button" class="ghost" id="reqcopy" data-t="copy">Copy</button></div>
+      <h3 style="margin-top:26px" data-t="api_title">API</h3>
+      <div class="msg" id="apiver" style="padding:0 0 8px"></div>
+      <table class="api"><thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Meaning</th></tr></thead><tbody id="apifields"></tbody></table>
+      <ul id="apiroutes"></ul>
+      <div class="msg" style="padding:8px 0 0">API.md</div>
     </div>
   </section>
 </div>
@@ -758,10 +754,10 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
   // forms and the Testing tab.
   (function () {
     var X = {
-      en: { test_tab: "Testing", t_show: "Test on the TV", t_show_note: "Each button sends a real test notification to the TV.", t_sound: "Sounds", f_mvol: "Sound volume (%)", f_delay: "The sound starts this long after the notification is sent (ms)", f_delay_note: "The banner appears a few seconds after the request. Press the button \"Send a notification with this sound\" below and move this slider until the sound and the banner arrive together.", t_goodie: "Goodie", t_goodie_note: "About 10 seconds of a well-known tune, played only with the notification sounds (you recognise it by the rhythm).", t_stop: "Stop", f_sound: "Sound", f_vol: "Volume (%)", no_sound: "No sound",
+      en: { test_tab: "Testing", tech_tab: "Technical", t_show: "Test on the TV", t_show_note: "Each button sends a real test notification to the TV.", t_sound: "Sounds", f_mvol: "Sound volume (%)", f_delay: "The sound starts this long after the notification is sent (ms)", f_delay_note: "The banner appears a few seconds after the request. Press the button \"Send a notification with this sound\" below and move this slider until the sound and the banner arrive together.", t_goodie: "Goodie", t_goodie_note: "About 10 seconds of a well-known tune, played only with the notification sounds (you recognise it by the rhythm).", t_stop: "Stop", f_sound: "Sound", f_vol: "Volume (%)", no_sound: "No sound",
         t_send_sound: "Send a notification with this sound", t_pick: "Tapping a sound plays it. Then press Send to try it in a notification.", t_missing: "This Shard cannot play sounds (the exec permission was not granted).",
         t_ready: "Sound Shard found.", t_sent: "Sent", t_none: "Pick a sound first" },
-      pt: { test_tab: "Testes", t_show: "Testar na TV", t_show_note: "Cada botão envia uma notificação de teste real para a TV.", t_sound: "Sons", f_mvol: "Volume do som (%)", f_delay: "O som começa este tempo depois de a notificação ser enviada (ms)", f_delay_note: "O banner aparece alguns segundos depois do pedido. Carregue no botão \"Enviar uma notificação com este som\" e mexa neste controlo até o som e o banner chegarem juntos.", t_goodie: "Surpresa", t_goodie_note: "Cerca de 10 segundos de uma música conhecida, tocada só com os sons de notificação (reconhece-se pelo ritmo).", t_stop: "Parar", f_sound: "Som", f_vol: "Volume (%)", no_sound: "Sem som",
+      pt: { test_tab: "Testes", tech_tab: "T\u00E9cnico", t_show: "Testar na TV", t_show_note: "Cada botão envia uma notificação de teste real para a TV.", t_sound: "Sons", f_mvol: "Volume do som (%)", f_delay: "O som começa este tempo depois de a notificação ser enviada (ms)", f_delay_note: "O banner aparece alguns segundos depois do pedido. Carregue no botão \"Enviar uma notificação com este som\" e mexa neste controlo até o som e o banner chegarem juntos.", t_goodie: "Surpresa", t_goodie_note: "Cerca de 10 segundos de uma música conhecida, tocada só com os sons de notificação (reconhece-se pelo ritmo).", t_stop: "Parar", f_sound: "Som", f_vol: "Volume (%)", no_sound: "Sem som",
         t_send_sound: "Enviar uma notificação com este som", t_pick: "Escolha um som e carregue em Enviar. Tocar num som também o reproduz.", t_missing: "Este Shard não pode tocar sons (a permissão exec não foi concedida).",
         t_ready: "Shard de som encontrado.", t_sent: "Enviado", t_none: "Escolha primeiro um som" }
     }, k, names = [], installed = null, chosen = "";

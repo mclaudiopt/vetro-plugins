@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.0
+- **The panel is organised for everyday use:** five tabs, Send, Try it, Settings, Senders and rules, Technical. Send has two steps (write the message, choose how it looks, with a plain sentence for each way to show it) and keeps the sound, pictures and duration under "More options". Try it has one-click examples (goal alert, breaking news, doorbell, simple message) and the "Is everything working?" check. Settings holds the sound volume and delay, your own sounds, the bottom toast opacity and the quiet hours. Deleting an own sound asks twice.
+- The screen app sources (app/) are the ones of app 0.2.3: it asks the TV for its own address, so the full-screen card works without a local build.
+
 ## 0.10.0
 - **Your own sounds:** upload a WAV (panel, Testing tab, or `POST sound-upload?name=<name>`) and use its name as `sound`, next to the eight system sounds. Checked on upload (WAV, PCM 16 bit, at most 10 s and 1 MB, at most 12), stored in a fixed folder on the TV and played by the same `paplay` command; a name is 1-24 characters of a-z, 0-9 and -. `GET sounds` has `custom`; `POST sound-delete` removes one.
 

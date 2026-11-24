@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#08102c"/><stop offset="1" stop-color="#14306a"/></linearGradient>
+    <pattern id="diag" width="28" height="28" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="28" fill="#6f95e6" fill-opacity="0.10"/></pattern>
+    <radialGradient id="vig" cx="35%" cy="35%" r="85%"><stop offset="0.3" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#030818" stop-opacity="0.85"/></radialGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/><rect width="1920" height="1080" fill="url(#diag)"/><rect width="1920" height="1080" fill="url(#vig)"/>
+  <rect x="0" y="864" width="1190" height="20" fill="#dc323c"/><rect x="0" y="894" width="1380" height="8" fill="#d2e1ff" fill-opacity="0.65"/>
+</svg>

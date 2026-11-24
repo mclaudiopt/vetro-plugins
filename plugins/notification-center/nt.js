@@ -171,14 +171,15 @@
     clearTimeout(cdTimer);
     if (cdEl && cdEl.parentNode) { cdEl.parentNode.removeChild(cdEl); }
     var el = cdEl = document.createElement('div');
-    el.style.cssText = 'margin-top:48px;color:#8b96ab;font-size:34px';
-    cardEl.appendChild(el);
+    // Small, in the top-left corner of the screen (the big number in the middle of the card was only for debugging).
+    el.style.cssText = 'position:fixed;left:36px;top:28px;color:#8b96ab;font-size:22px;line-height:1.2;text-align:left;z-index:5';
+    document.body.appendChild(el);
     (function tick() {
       el.innerHTML = '';
-      var lbl = document.createElement('div'), num = document.createElement('div');
-      lbl.textContent = TX.back;
-      num.textContent = String(sec);
-      num.style.cssText = 'font-size:220px;font-weight:700;line-height:1.05;color:#fff';
+      var lbl = document.createElement('span'), num = document.createElement('span');
+      lbl.textContent = TX.back + ' ';
+      num.textContent = String(sec) + ' s';
+      num.style.cssText = 'font-weight:700;color:#e8edf6';
       el.appendChild(lbl); el.appendChild(num);
       if (sec <= 0) { return; }
       sec -= 1; cdTimer = setTimeout(tick, 1000);

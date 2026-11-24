@@ -402,6 +402,16 @@ module.exports = function (ctx) {
         for (i = 0; i < queue.length; i++) { if (queue[i].id === id) { note = queue[i]; } }
         var kind = /[?&]kind=wallpaper(&|$)/.test(String(req.url || '')) ? 'wallpaper' : 'image', src = note && note[kind], key = id + ':' + kind;
         if (!src) { return sendJson(res, 404, { error: 'no ' + kind + ' for that notification' }); }
+        // A theme wallpaper ("theme:sport", "theme:news") is a small SVG shipped with the Shard: served from the plugin folder, nothing is fetched.
+        var tm = /^theme:(sport|news)$/.exec(String(src));
+        if (tm) {
+            return fs.readFile(path.join(__dirname, 'wallpapers', tm[1] + '.svg'), function (e, buf) {
+                if (e) { return sendJson(res, 404, { ok: false, error: 'theme wallpaper missing' }); }
+                if (info) { return sendJson(res, 200, { ok: true, type: 'image/svg+xml', bytes: buf.length }); }
+                res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Length': buf.length });
+                res.end(buf);
+            });
+        }
         function out(hit) {
             if (info) { return sendJson(res, 200, { ok: true, type: hit.type, bytes: hit.buf.length }); }
             res.writeHead(200, { 'Content-Type': hit.type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Length': hit.buf.length });
@@ -435,7 +445,8 @@ module.exports = function (ctx) {
                 icon: { type: 'string', max: MAX_ICON, note: 'One emoji (or an emoji sequence) in front of the title; default by level. Cut at whole emoji, never in the middle of one.' },
                 image: { type: 'url', note: 'http/https picture under the message on the full-screen card, or the icon of the overlay bar (PNG). The Shard fetches it.' },
                 app: { type: 'string', note: 'Id of an app installed on the TV (for example 9Ur5IzDKqV.TizenYouTube; GET /apps on Vetro lists them). Its icon is used as the picture when there is no image: the card shows it, the overlay bar uses it as its icon.' },
-                wallpaper: { type: 'url', note: 'http/https full-screen background behind the card. The Shard fetches it.' },
+                wallpaper: { type: 'url', note: 'http/https full-screen background behind the card. The Shard fetches it. It wins over `theme`.' },
+                theme: { type: 'string', enum: Object.keys(rules.THEMES), note: 'A default wallpaper for the full-screen card, shipped with the Shard (sport or news), used when the request has no `wallpaper`. A source can have its own default theme.' },
                 seconds: { type: 'integer', min: MIN_SECONDS, max: MAX_SECONDS, default: DEFAULT_SECONDS, note: 'How long it waits in the queue (always at least duration + 20).' },
                 open: { type: 'boolean', default: true, note: 'false only queues it, without launching the app or its service.' },
                 sound: { type: 'string', enum: Object.keys(rules.SOUNDS), note: 'Plays one of the TV system sounds with the notification. Empty = no sound; one sound at most every 0.8 s. Not played for a notification held back by quiet hours or merged as a repeat.' },
@@ -664,7 +675,8 @@ module.exports = function (ctx) {
                 title: clean(b.title, MAX_TITLE),
                 icon: cleanIcon(b.icon),
                 image: cleanUrl(b.image) || appIconUrl(b.app),
-                wallpaper: cleanUrl(b.wallpaper),
+                wallpaper: cleanUrl(b.wallpaper) || (has(rules.THEMES, b.theme) ? 'theme:' + b.theme : ''),
+                theme: has(rules.THEMES, b.theme) ? b.theme : '',
                 message: message,
                 level: has(LEVELS, b.level) ? b.level : 'info',
                 mode: has(MODES, b.mode) ? b.mode : 'banner',
@@ -674,7 +686,7 @@ module.exports = function (ctx) {
                 volume: soundVolume(b.volume),
                 expires: Date.now() + secs * 1000
             };
-            var entry = { id: note.id, title: note.title, message: note.message, level: note.level, mode: note.mode, duration: note.duration, icon: note.icon, image: note.image, wallpaper: note.wallpaper, source: source, sound: note.sound, volume: note.volume, at: Date.now() };
+            var entry = { id: note.id, title: note.title, message: note.message, level: note.level, mode: note.mode, duration: note.duration, icon: note.icon, image: note.image, wallpaper: note.wallpaper, theme: note.theme, source: source, sound: note.sound, volume: note.volume, at: Date.now() };
             // Quiet hours: below the allowed level the notification is only recorded, never shown.
             if (rules.isQuiet(settings, note.level, new Date())) {
                 entry.suppressed = true;

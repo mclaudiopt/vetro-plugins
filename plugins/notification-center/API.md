@@ -29,6 +29,7 @@ JSON body. Only `message` is required.
 | `title` | string, max 40 | empty | Bold line above the message. |
 | `level` | `info` `ok` `warn` `alert` | `info` | Colours the card and the panel; the native banner gets the level's emoji. |
 | `app` | string (an app id) | none | The id of an app installed on the TV, for example `9Ur5IzDKqV.TizenYouTube` (Vetro's `GET /apps` lists them). Its icon is used as the picture when the request has no `image`: the full-screen card shows it, and the `overlay` bar draws it as its icon. Only a plain id (letters, digits, `.`, `_`, `-`, up to 64) is accepted; an unknown app gives no picture and the notification is shown anyway. |
+| `theme` | `sport` `news` | none | A default wallpaper for the full-screen card (`full`, `both`), shipped with the Shard as a small SVG; used when the request has no `wallpaper` (a `wallpaper` URL always wins). A source can have its own default theme (`POST profiles`), so the Match alerts source can always be `sport`. In `GET recent` and `GET notifications` such a wallpaper shows as `theme:sport` / `theme:news`. |
 | `mode` | `banner` `full` `both` `overlay` | `banner` | `banner`: the native Samsung banner over whatever is running, no app switch. `full`: a full-screen card (the companion app comes to the front). `both`: card and banner. `overlay` (the **bottom toast** in the panel): a bar near the bottom of the screen drawn **over the running picture** by this Shard's own helper (no app switch, no focus change, the video is never interrupted); `level` sets the colour of its stripe, a PNG `image` becomes its icon, `duration` is how long it stays, and the background opacity is the setting `overlayOpacity`. |
 | `duration` | integer 1-60 | `8` | Seconds on screen. |
 | `icon` | string, max 16 | by level | One emoji (or emoji sequence) in front of the title, e.g. the ball for a goal. Cut at whole emoji only. |
@@ -130,7 +131,7 @@ A sound can be chosen with the header `Sound` (or the JSON field `sound`, and `v
 | Route | What it does |
 |---|---|
 | `GET profiles` | `{profiles:{<source>:{enabled,icon,level,mode,duration,rate,hasKey}}, max:20}`. The key is never returned. |
-| `POST profiles` | Create, change or delete one: `{source, icon?, level?, mode?, duration?, sound?, volume?, rate?, enabled?, key?, genKey?, delete?}`. `icon`, `level`, `mode`, `duration`, `sound` and `volume` fill in what the sender leaves out (the sender's own value always wins). `rate` is the most notifications per minute (`0` = no limit). `key` (8-64 characters; `""` clears it) makes the source require the header `X-NC-Key`; `genKey: true` creates a random key and returns it **once**. |
+| `POST profiles` | Create, change or delete one: `{source, icon?, level?, mode?, theme?, duration?, sound?, volume?, rate?, enabled?, key?, genKey?, delete?}`. `icon`, `level`, `mode`, `duration`, `sound` and `volume` fill in what the sender leaves out (the sender's own value always wins). `rate` is the most notifications per minute (`0` = no limit). `key` (8-64 characters; `""` clears it) makes the source require the header `X-NC-Key`; `genKey: true` creates a random key and returns it **once**. |
 
 **Settings:**
 

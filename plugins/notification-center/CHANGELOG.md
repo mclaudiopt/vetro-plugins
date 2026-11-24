@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0
+- **Default wallpapers:** new field `theme` (`sport` or `news`) picks a small SVG wallpaper shipped with the Shard for the full-screen card; a `wallpaper` URL still wins. A source can have its own default theme, and the panel has a selector in the Notifications form and in Sources and rules.
+
+## 0.8.6
+- The countdown of the full-screen card is small and in the top-left corner of the screen (it was a big number in the middle of the card, only there for debugging). It comes from `nt.js`, so the installed app needs no update.
+
 ## 0.8.5
 - Everything technical is in one tab, "Technical": the status and the companion app, the request examples for other apps and Shards, and the API. The descriptions of the overlay say "bottom toast" too.
 

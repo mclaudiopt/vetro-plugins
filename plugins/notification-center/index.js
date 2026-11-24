@@ -516,7 +516,7 @@ module.exports = function (ctx) {
                 image: { type: 'url', note: 'http/https picture under the message on the full-screen card, or the icon of the overlay bar (PNG). The Shard fetches it.' },
                 app: { type: 'string', note: 'Id of an app installed on the TV (for example 9Ur5IzDKqV.TizenYouTube; GET /apps on Vetro lists them). Its icon is used as the picture when there is no image: the card shows it, the overlay bar uses it as its icon.' },
                 wallpaper: { type: 'url', note: 'http/https full-screen background behind the card. The Shard fetches it. It wins over `theme`.' },
-                theme: { type: 'string', enum: Object.keys(rules.THEMES), note: 'A default wallpaper for the full-screen card, shipped with the Shard (sport or news), used when the request has no `wallpaper`. A source can have its own default theme.' },
+                theme: { type: 'string', enum: themeNames(), note: 'A default wallpaper for the full-screen card: sport or news (shipped with the Shard) or a theme you added (GET themes), used when the request has no `wallpaper`. A source can have its own default theme.' },
                 priority: { type: 'string', enum: Object.keys(rules.PRIORITIES), default: 'normal', note: 'high = first in the queue, shown even in quiet hours and never merged as a repeat. A source can have a default priority. ntfy priority 5 is high.' },
                 action: { type: 'object', note: '{app, label?}: a button on the full-screen card (modes full and both) that opens the installed app with that id; label is up to 24 characters (default Open). The card also has a Dismiss button. The bar and the Samsung banner have no buttons.' },
                 seconds: { type: 'integer', min: MIN_SECONDS, max: MAX_SECONDS, default: DEFAULT_SECONDS, note: 'How long it waits in the queue (always at least duration + 20).' },
@@ -546,6 +546,8 @@ module.exports = function (ctx) {
                 { method: 'POST', path: 'sound-upload?name=<name>', summary: 'Upload one of your own sounds: the raw bytes of a WAV (PCM 16 bit, mono or stereo, 8-48 kHz, at most 10 s and 1 MB) as the body. The name is 1-24 characters of a-z, 0-9 and -, and cannot be a built-in sound; at most 12. Then use the name as `sound`.', returns: '{ok, name, seconds}' },
                 { method: 'POST', path: 'sound-delete', summary: 'Delete one of your own sounds.', body: '{name}', returns: '{ok, deleted}' },
                 { method: 'POST', path: 'action?id=<id>', summary: 'Used by the full-screen card when the button of a notification is pressed: launches the app that notification named in `action` (404 if that notification has no button or is gone, 429 if used less than 2 s ago).', returns: '{ok, app}' },
+                { method: 'GET', path: 'themes', summary: 'The wallpaper themes: the built-in ones (sport, news) and your own (name to picture address).', returns: '{builtin:[...], custom:{name:url}, max}' },
+                { method: 'POST', path: 'themes', summary: 'Add or change one of your own themes, or delete it. Its name is 1-24 characters of a-z, 0-9 and -, not a built-in name; the address is http or https; at most 12. Then send theme:"<name>" (or give a source that default).', body: '{name, url} or {name, delete:true}', returns: '{ok, name, url} or {ok, deleted}' },
                 { method: 'GET', path: 'export[?sounds=1][&keys=1]', summary: 'The setup of this Notification Center as one JSON file (settings, sources, webhooks); sounds=1 adds your own sounds, keys=1 adds the keys of the senders (keep that file private). Load it on another TV with POST import.', returns: 'a JSON file ({format, formatVersion, shard, exportedAt, settings, sources, webhooks, sounds})' },
                 { method: 'POST', path: 'import', summary: 'Load a setup file made by GET export: the settings are replaced, sources and webhooks of the same name are replaced and the others are kept, sounds are added. Everything is checked again; what cannot be used is listed in skipped.', body: 'the file, as it is', returns: '{ok, imported:{settings,sources,webhooks,sounds}, skipped:[...]}' },
                 { method: 'GET', path: 'sounds', summary: 'The sounds a request can choose, whether this Shard can play sounds (exec granted), the volume and timing settings, the timing of the last banner sound (trace) and the result of the last attempt.', returns: '{sounds:[...], songs:[{name,title}], available, volume, delayMs, trace, last}' },
@@ -677,6 +679,47 @@ module.exports = function (ctx) {
         return { b: rules.applyProfile(b, profile), source: source, settings: settings };
     }
 
+    // ---- wallpaper themes you can add ----
+    var THEME_NAME_RE = /^[a-z0-9][a-z0-9-]{0,23}$/, MAX_THEMES = 12;
+    function storedThemes() { var t = cfgGet().themes; return rules.isObj(t) ? t : {}; }
+    // Keeps rules.CUSTOM_THEMES in step with the configuration: only well-named themes with an http(s) address, never the name of a built-in one.
+    function loadThemes() {
+        var t = storedThemes();
+        Object.keys(rules.CUSTOM_THEMES).forEach(function (k) { delete rules.CUSTOM_THEMES[k]; });
+        Object.keys(t).forEach(function (n) {
+            if (THEME_NAME_RE.test(n) && !has(rules.THEMES, n) && cleanUrl(t[n]) && Object.keys(rules.CUSTOM_THEMES).length < MAX_THEMES) { rules.CUSTOM_THEMES[n] = 1; }
+        });
+    }
+    function themeNames() { return Object.keys(rules.THEMES).concat(Object.keys(rules.CUSTOM_THEMES)); }
+    function customThemes() { var t = storedThemes(), out = {}; Object.keys(rules.CUSTOM_THEMES).forEach(function (n) { out[n] = cleanUrl(t[n]); }); return out; }
+    // The wallpaper a theme stands for: a built-in one is served by the Shard (theme:name), an own one is the address the user gave.
+    function themeWallpaper(name) {
+        if (has(rules.THEMES, name)) { return 'theme:' + name; }
+        return has(rules.CUSTOM_THEMES, name) ? cleanUrl(storedThemes()[name]) : '';
+    }
+    function handleThemes(req, res) {
+        if (req.method === 'GET') { return sendJson(res, 200, { builtin: Object.keys(rules.THEMES), custom: customThemes(), max: MAX_THEMES }); }
+        readBodyG(req, res, function (raw) {
+            var b;
+            try { b = JSON.parse(raw); } catch (e) { return sendJson(res, 400, { error: 'invalid JSON' }); }
+            b = rules.isObj(b) ? b : {};
+            var name = str(b.name).trim();
+            if (!THEME_NAME_RE.test(name) || has(rules.THEMES, name)) { return sendJson(res, 400, { error: 'name: 1-24 characters, a-z, 0-9 and -, and not the name of a built-in theme' }); }
+            if (b.delete === true) {
+                if (!has(rules.CUSTOM_THEMES, name)) { return sendJson(res, 404, { error: 'no theme with that name' }); }
+                saveCfg(function (c) { if (rules.isObj(c.themes)) { delete c.themes[name]; } });
+                loadThemes();
+                return sendJson(res, 200, { ok: true, deleted: name });
+            }
+            var url = cleanUrl(b.url);
+            if (!url) { return sendJson(res, 400, { error: 'url must be an http or https address of a picture (up to 290 characters)' }); }
+            if (!has(rules.CUSTOM_THEMES, name) && Object.keys(rules.CUSTOM_THEMES).length >= MAX_THEMES) { return sendJson(res, 400, { error: 'at most ' + MAX_THEMES + ' own themes: delete one first' }); }
+            saveCfg(function (c) { c.themes = rules.isObj(c.themes) ? c.themes : {}; c.themes[name] = url; });
+            loadThemes();
+            sendJson(res, 200, { ok: true, name: name, url: url });
+        });
+    }
+
     // ---- copy the setup to another TV ----
     // GET export gives one JSON file with the settings, the sources, the webhooks and (only if asked) the own sounds and the sender keys;
     // POST import reads such a file back through the same checks as every other route (nothing is trusted: each part is sanitised again).
@@ -684,7 +727,7 @@ module.exports = function (ctx) {
     function handleExport(req, res) {
         var q = String(req.url || ''), withKeys = /[?&]keys=1(&|$)/.test(q), withSounds = /[?&]sounds=1(&|$)/.test(q), c = cfgGet(), ver = '';
         try { ver = require('./manifest.json').version; } catch (e) { /* manifest not readable */ }
-        var out = { format: SETUP_FORMAT, formatVersion: 1, shard: ver, exportedAt: new Date().toISOString(), keysIncluded: withKeys, settings: settingsNow(), sources: {}, webhooks: c.hooks || {}, sounds: {} };
+        var out = { format: SETUP_FORMAT, formatVersion: 1, shard: ver, exportedAt: new Date().toISOString(), keysIncluded: withKeys, settings: settingsNow(), sources: {}, webhooks: c.hooks || {}, themes: customThemes(), sounds: {} };
         Object.keys(c.profiles || {}).forEach(function (k) {
             var p = c.profiles[k], pub = rules.publicProfile(p);
             delete pub.hasKey;
@@ -703,7 +746,7 @@ module.exports = function (ctx) {
             var d;
             try { d = JSON.parse(buf.toString('utf8')); } catch (e) { return sendJson(res, 400, { error: 'not a JSON file' }); }
             if (!rules.isObj(d) || d.format !== SETUP_FORMAT || d.formatVersion !== 1) { return sendJson(res, 400, { error: 'not a Notification Center setup file' }); }
-            var skipped = [], done = { settings: false, sources: 0, webhooks: 0, sounds: 0 };
+            var skipped = [], done = { settings: false, sources: 0, webhooks: 0, sounds: 0, themes: 0 };
             function short(v) { return str(v).replace(/[^A-Za-z0-9 ._-]/g, '?').slice(0, 32); }
             // Sounds first, so that sources and webhooks can use them.
             if (rules.isObj(d.sounds)) {
@@ -719,6 +762,15 @@ module.exports = function (ctx) {
                 });
             }
             saveCfg(function (c) {
+                if (rules.isObj(d.themes)) {
+                    c.themes = rules.isObj(c.themes) ? c.themes : {};
+                    Object.keys(d.themes).forEach(function (n) {
+                        var u = cleanUrl(d.themes[n]);
+                        if (!THEME_NAME_RE.test(n) || has(rules.THEMES, n) || !u) { skipped.push('theme ' + short(n)); return; }
+                        if (!has(c.themes, n) && Object.keys(c.themes).length >= MAX_THEMES) { skipped.push('theme ' + n + ' (too many themes)'); return; }
+                        c.themes[n] = u; done.themes += 1;
+                    });
+                }
                 if (rules.isObj(d.settings)) { c.settings = rules.sanitizeSettings(d.settings, c.settings); done.settings = true; }
                 var ps = c.profiles = c.profiles || {}, hs = c.hooks = c.hooks || {};
                 if (rules.isObj(d.sources)) {
@@ -742,6 +794,7 @@ module.exports = function (ctx) {
                     });
                 }
             });
+            loadThemes();   // the themes just imported can be used by the sources imported in the same file
             sendJson(res, 200, { ok: true, imported: done, skipped: skipped.slice(0, 50) });
         }, MAX_SETUP_BYTES);
     }
@@ -808,8 +861,8 @@ module.exports = function (ctx) {
                 title: clean(b.title, MAX_TITLE),
                 icon: cleanIcon(b.icon),
                 image: cleanUrl(b.image) || appIconUrl(b.app),
-                wallpaper: cleanUrl(b.wallpaper) || (has(rules.THEMES, b.theme) ? 'theme:' + b.theme : ''),
-                theme: has(rules.THEMES, b.theme) ? b.theme : '',
+                wallpaper: cleanUrl(b.wallpaper) || themeWallpaper(b.theme),
+                theme: rules.hasTheme(b.theme) ? b.theme : '',
                 priority: b.priority === 'high' ? 'high' : '',
                 action: cleanAction(b.action),
                 message: message,
@@ -918,7 +971,7 @@ module.exports = function (ctx) {
     }
 
     return {
-        start: function () { loadCustom();},
+        start: function () { loadCustom(); loadThemes(); },
         stop: function () { abortFetches(); cancelSounds(); stopSong(); queue = []; writeQueueFile(); },
         status: function () { prune(); return { queued: queue.length, appId: appId() }; },
         route: function (req, res, sub) {
@@ -930,6 +983,7 @@ module.exports = function (ctx) {
             if (sub === 'img' && req.method === 'GET') { mark('img', req); serveImage(req, res); return true; }
             if (sub === 'ntfy' && req.method === 'POST') { handleNtfy(req, res); return true; }
             if (sub === 'play' && req.method === 'POST') { handlePlay(req, res); return true; }
+            if (sub === 'themes' && (req.method === 'GET' || req.method === 'POST')) { handleThemes(req, res); return true; }
             if (sub === 'action' && req.method === 'POST') { handleAction(req, res); return true; }
             if (sub === 'export' && req.method === 'GET') { handleExport(req, res); return true; }
             if (sub === 'import' && req.method === 'POST') { handleImport(req, res); return true; }

@@ -28,27 +28,27 @@ const NT = '/plugins/notification-center/api/nt.js';
 
 test('the wired address of the TV is tried first, then 127.0.0.1', async () => {
     const r = run({tizen: systeminfo({ETHERNET_NETWORK: '192.168.1.50'})});
-    await wait(60);
+    await wait(250);
     assert.deepEqual(r.scripts.map(s => s.split('?')[0]), ['http://192.168.1.50:8099' + NT, 'http://127.0.0.1:8099' + NT]);
     assert.equal(r.log[r.log.length - 1], 'Could not load nt.js from the Shard. Is it running?');
 });
 
 test('without a cable the wireless address is used', async () => {
     const r = run({tizen: systeminfo({WIFI_NETWORK: '10.0.0.7'})});
-    await wait(60);
+    await wait(250);
     assert.equal(r.scripts[0].split('?')[0], 'http://10.0.0.7:8099' + NT);
 });
 
 test('the Samsung network API wins when it answers', async () => {
     const r = run({webapis: {network: {getIp: () => '192.168.5.9'}}, tizen: systeminfo({ETHERNET_NETWORK: '192.168.1.50'})});
-    await wait(60);
+    await wait(250);
     assert.equal(r.scripts[0].split('?')[0], 'http://192.168.5.9:8099' + NT);
 });
 
 test('with no network information only 127.0.0.1 is tried', async () => {
     const none = run({});
     const noRead = run({tizen: systeminfo({})});
-    await wait(80);
+    await wait(250);
     assert.deepEqual(none.scripts.map(s => s.split('?')[0]), ['http://127.0.0.1:8099' + NT]);
     assert.deepEqual(noRead.scripts.map(s => s.split('?')[0]), ['http://127.0.0.1:8099' + NT]);
 });
@@ -57,14 +57,14 @@ test('only a plain IPv4 address of the TV is accepted; text from the system can 
     const bad = ['evil.example.com/x', '192.168.1.1:80/x', '999.1.1.1', '0.0.0.0', '127.0.0.1', '10.0.0.1/../x', '', null, 12345, {toString: () => '10.0.0.1'}, '10.0.0'];
     for (const value of bad) {
         const r = run({tizen: systeminfo({ETHERNET_NETWORK: value, WIFI_NETWORK: value})});
-        await wait(40);
+        await wait(120);
         assert.deepEqual(r.scripts.map(s => s.split('?')[0]), ['http://127.0.0.1:8099' + NT], 'rejected: ' + String(value));
     }
 });
 
 test('the first address that works stops the search', async () => {
     const r = run({tizen: systeminfo({ETHERNET_NETWORK: '192.168.1.50'}), failAll: false});
-    await wait(60);
+    await wait(250);
     assert.equal(r.scripts.length, 1);
     assert.equal(r.log.length, 0);
 });

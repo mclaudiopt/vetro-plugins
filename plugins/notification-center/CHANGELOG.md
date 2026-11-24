@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.0
+- **Your own wallpaper themes (Settings):** a name and the address of a picture, next to sport and news (`GET/POST themes`); `theme` accepts them, sources can have one as default, and they travel in the setup file.
+- The club buttons of Try it (0.13.2) stay for now, as a way to see how a crest looks; the crests of the clubs belong to the Match alerts Shard, which already sends them as `image` and will have its own test buttons.
+
 ## 0.13.2
 - Try it: "Simulate a goal for a club" has a button for Sporting, Benfica, Porto and Feyenoord, each with the crest and the colour of the club, as the Match alerts sends them (replaces the two single examples of 0.13.1).
 

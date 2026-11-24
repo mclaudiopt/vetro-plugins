@@ -8,6 +8,9 @@ var LEVELS = { info: 1, ok: 1, warn: 1, alert: 1 };
 var MODES = { both: 1, banner: 1, full: 1, overlay: 1 };
 // Default wallpapers of the full-screen card, shipped with the Shard as small SVG files (wallpapers/<name>.svg).
 var THEMES = { sport: 1, news: 1 };
+// Wallpaper themes the user added (names only; the Shard keeps this in step with its configuration). A theme is a built-in one or one of these.
+var CUSTOM_THEMES = {};
+function hasTheme(n) { return has(THEMES, n) || has(CUSTOM_THEMES, n); }
 // high: first in the queue, shown even in quiet hours, never merged as a repeat. Anything else is normal.
 var PRIORITIES = { normal: 1, high: 1 };
 // The sounds of the notification-sound Shard (a closed list: a request can only pick one of these names, never a file).
@@ -74,7 +77,7 @@ function sanitizeProfile(p, cleanIcon, old) {
         rate: has(p, 'rate') ? clampInt(p.rate, 0, MAX_RATE, 0) : (old.rate || 0),
         sound: has(p, 'sound') ? (hasSound(p.sound) ? p.sound : '') : (old.sound || ''),
         volume: has(p, 'volume') ? storedVolume(p.volume) : (old.volume || 0),
-        theme: has(THEMES, p.theme) ? p.theme : (has(p, 'theme') && !p.theme ? '' : (old.theme || '')),
+        theme: hasTheme(p.theme) ? p.theme : (has(p, 'theme') && !p.theme ? '' : (old.theme || '')),
         priority: has(p, 'priority') ? (p.priority === 'high' ? 'high' : '') : (old.priority || ''),
         key: old.key || ''
     };
@@ -186,7 +189,7 @@ function buildFromHook(hook, data) {
 
 module.exports = {
     clampVolume: clampVolume, storedVolume: storedVolume,
-    LEVEL_RANK: LEVEL_RANK, LEVELS: LEVELS, MODES: MODES, THEMES: THEMES, PRIORITIES: PRIORITIES, SOUNDS: SOUNDS, CUSTOM: CUSTOM, hasSound: hasSound, MAX_SOURCES: MAX_SOURCES, MAX_HOOKS: MAX_HOOKS, MAX_TEMPLATE: MAX_TEMPLATE, MAX_RATE: MAX_RATE,
+    LEVEL_RANK: LEVEL_RANK, LEVELS: LEVELS, MODES: MODES, THEMES: THEMES, CUSTOM_THEMES: CUSTOM_THEMES, hasTheme: hasTheme, PRIORITIES: PRIORITIES, SOUNDS: SOUNDS, CUSTOM: CUSTOM, hasSound: hasSound, MAX_SOURCES: MAX_SOURCES, MAX_HOOKS: MAX_HOOKS, MAX_TEMPLATE: MAX_TEMPLATE, MAX_RATE: MAX_RATE,
     str: str, num: num, has: has, isObj: isObj,
     cleanSource: cleanSource, cleanHookName: cleanHookName, sameKey: sameKey, KEY_RE: KEY_RE,
     sanitizeProfile: sanitizeProfile, publicProfile: publicProfile, applyProfile: applyProfile, makeLimiter: makeLimiter,

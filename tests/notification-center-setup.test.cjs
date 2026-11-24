@@ -92,7 +92,7 @@ test('a full export loads on another TV: settings, sources with their key, webho
     const file = (await call(a, 'GET', 'export?sounds=1&keys=1')).text;
     const r = await call(b, 'POST', 'import', file);
     assert.equal(r.code, 200, r.text);
-    assert.deepEqual(r.json.imported, {settings: true, sources: 1, webhooks: 1, sounds: 1});
+    assert.deepEqual(r.json.imported, {settings: true, sources: 1, webhooks: 1, sounds: 1, themes: 0});
     assert.deepEqual(r.json.skipped, []);
     assert.equal((await call(b, 'GET', 'settings')).json.settings.soundVolume, 60);
     const p = (await call(b, 'GET', 'profiles')).json.profiles['match-alerts'];
@@ -125,7 +125,7 @@ test('only a real setup file is read, and each part is checked again', () => wit
     };
     const r = await call(b, 'POST', 'import', hostile);
     assert.equal(r.code, 200, r.text);
-    assert.deepEqual(r.json.imported, {settings: true, sources: 1, webhooks: 1, sounds: 1});
+    assert.deepEqual(r.json.imported, {settings: true, sources: 1, webhooks: 1, sounds: 1, themes: 0});
     assert.ok(r.json.skipped.length >= 6);
     const s = (await call(b, 'GET', 'settings')).json.settings;
     assert.equal(s.soundVolume, 100);

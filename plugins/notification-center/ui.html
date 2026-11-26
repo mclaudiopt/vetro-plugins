@@ -246,6 +246,10 @@ h1 { font-size: 1.25rem; }
 .chip.plain::before { display: none; }
 .dtabs { margin-bottom: 16px; }
 @media (max-width: 620px) { .brand { flex: 1 1 0; } .lead { display: none; } .lang { order: 1; } .sub { order: 2; flex-basis: 100%; justify-content: flex-start; margin: 0; } }
+.rl .chip { margin-left: 8px; }
+#recent li div { white-space: normal; }
+button.chip { cursor: pointer; background: var(--danger-soft); }
+@media (max-width: 480px) { .md { flex-basis: 40%; } }
 </style>
 </head>
 <body>
@@ -339,31 +343,13 @@ h1 { font-size: 1.25rem; }
           <h3 data-t="src_title">Sources</h3>
           <div class="msg" style="padding:0 0 8px" data-t="src_note">One entry per sender. Its defaults fill in what a request leaves out; a key makes it require the header X-NC-Key.</div>
           <ul id="srclist"></ul>
-          <div class="rulesgrid" style="margin-top:10px">
-            <div><label class="lab" for="s_name" data-t="f_name">Name</label><input type="text" id="s_name" maxlength="32" placeholder="doorbell"></div>
-            <div><label class="lab" for="s_icon" data-t="f_icon">Icon</label><input type="text" id="s_icon" maxlength="16"></div>
-            <div><label class="lab" for="s_level" data-t="f_level">Level</label><select id="s_level"><option value=""></option><option>info</option><option>ok</option><option>warn</option><option>alert</option></select></div>
-            <div><label class="lab" for="s_mode" data-t="f_mode">Show as</label><select id="s_mode"><option value=""></option><option>banner</option><option>full</option><option>both</option><option>overlay</option></select></div>
-            <div><label class="lab" for="s_theme" data-t="f_theme">Default wallpaper</label><select id="s_theme"><option value=""></option></select></div>
-            <div><label class="lab" for="s_priority" data-t="lab_prio">How urgent is it?</label><select id="s_priority"><option value="">normal</option><option value="high">high</option></select></div>
-            <div><label class="lab" for="s_dur" data-t="f_dur">Duration (s)</label><input type="text" id="s_dur" inputmode="numeric" maxlength="2"></div>
-            <div><label class="lab" for="s_rate" data-t="f_rate">Max per minute (0 = no limit)</label><input type="text" id="s_rate" inputmode="numeric" maxlength="3"></div>
-            <div><label class="lab" for="s_sound" data-t="f_sound">Sound</label><select id="s_sound"></select></div>
-            <div><label class="lab" for="s_vol" data-t="f_vol">Volume (%)</label><input type="text" id="s_vol" inputmode="numeric" maxlength="3"></div>
-          </div>
-          <div class="setting"><label for="s_on" id="s_on-name" data-t="f_enabled">Enabled</label><label class="switch"><input type="checkbox" role="switch" id="s_on" aria-labelledby="s_on-name" checked><span aria-hidden="true"></span></label></div>
-          <div class="row"><button type="button" class="send" id="s_save" data-t="save">Save</button><button type="button" class="ghost" id="s_key" data-t="gen_key">New key</button><button type="button" class="ghost" id="s_clearkey" data-t="clear_key">Remove key</button><button type="button" class="ghost danger" id="s_del" data-t="del">Delete</button></div>
-          <div class="msg" id="srcmsg" style="padding:8px 0 0"></div>
-          <pre id="srckey" hidden></pre>
+          <div class="row"><button type="button" id="s_add" data-t="s_add">Add a sender</button></div>
           <h3 data-t="r_title">Repeats and unknown senders</h3>
           <label class="lab" for="g_secs" data-t="g_secs">Count repeats inside (s, 0 = off)</label>
           <input type="text" id="g_secs" inputmode="numeric" maxlength="4">
           <div class="setting"><label for="g_strict" id="g_strict-name" data-t="g_strict">Refuse senders that have no source entry</label><label class="switch"><input type="checkbox" role="switch" id="g_strict" aria-labelledby="g_strict-name"><span aria-hidden="true"></span></label></div>
           <div class="row"><button type="button" class="send" id="r_save" data-t="save">Save</button></div>
           <div class="msg" id="rmsg"></div>
-        </div>
-        <div>
-
           <h3 style="margin-top:22px" data-t="h_title">Webhooks</h3>
           <div class="msg" style="padding:0 0 8px" data-t="h_note">Turn any JSON a service already sends into a notification. Use {{path.to.value}} from the JSON in the texts.</div>
           <ul id="hooklist"></ul>
@@ -382,6 +368,32 @@ h1 { font-size: 1.25rem; }
           <div class="msg" id="hmsg" style="padding:8px 0 0"></div>
           <pre id="hurl" hidden></pre>
         </div>
+        <div>
+          <h3 data-t="ed_title">Sender</h3>
+          <div class="rulesgrid" style="margin-top:10px">
+            <div><label class="lab" for="s_name" data-t="f_name">Name</label><input type="text" id="s_name" maxlength="32" placeholder="doorbell"></div>
+            <div><label class="lab" for="s_icon" data-t="f_icon">Icon</label><input type="text" id="s_icon" maxlength="16"></div>
+            <div><label class="lab" for="s_level" data-t="f_level">Level</label><select id="s_level"><option value=""></option><option>info</option><option>ok</option><option>warn</option><option>alert</option></select></div>
+            <div><label class="lab" for="s_mode" data-t="f_mode">Show as</label><select id="s_mode"><option value=""></option><option>banner</option><option>full</option><option>both</option><option>overlay</option></select></div>
+            <div><label class="lab" for="s_theme" data-t="f_theme">Default wallpaper</label><select id="s_theme"><option value=""></option></select></div>
+            <div><label class="lab" for="s_priority" data-t="lab_prio">How urgent is it?</label><select id="s_priority"><option value="">normal</option><option value="high">high</option></select></div>
+            <div><label class="lab" for="s_dur" data-t="f_dur">Duration (s)</label><input type="text" id="s_dur" inputmode="numeric" maxlength="2"></div>
+            <div><label class="lab" for="s_rate" data-t="f_rate">Max per minute (0 = no limit)</label><input type="text" id="s_rate" inputmode="numeric" maxlength="3"></div>
+            <div><label class="lab" for="s_sound" data-t="f_sound">Sound</label><select id="s_sound"></select></div>
+            <div><label class="lab" for="s_vol" data-t="f_vol">Volume (%)</label><input type="text" id="s_vol" inputmode="numeric" maxlength="3"></div>
+          </div>
+          <div class="setting"><label for="s_on" id="s_on-name" data-t="f_enabled">Enabled</label><label class="switch"><input type="checkbox" role="switch" id="s_on" aria-labelledby="s_on-name" checked><span aria-hidden="true"></span></label></div>
+          <h4 data-t="al_title">What this sender may decide</h4>
+          <div class="setting"><label for="s_asound" id="s_asound-name" data-t="s_asound">Choose the sound</label><label class="switch"><input type="checkbox" role="switch" id="s_asound" aria-labelledby="s_asound-name" checked><span aria-hidden="true"></span></label></div>
+          <div class="setting"><label for="s_amode" id="s_amode-name" data-t="s_amode">Choose how it appears</label><label class="switch"><input type="checkbox" role="switch" id="s_amode" aria-labelledby="s_amode-name" checked><span aria-hidden="true"></span></label></div>
+          <div class="setting"><label for="s_aurgent" id="s_aurgent-name" data-t="s_aurgent">Send urgent ones (they pass quiet hours)</label><label class="switch"><input type="checkbox" role="switch" id="s_aurgent" aria-labelledby="s_aurgent-name" checked><span aria-hidden="true"></span></label></div>
+          <div class="msg" id="s_why" aria-live="polite" style="padding:0 0 8px;white-space:pre-line"></div>
+          <h4 data-t="cat_title">Categories</h4>
+          <div id="s_cats"></div>
+          <div class="row"><button type="button" class="send" id="s_save" data-t="save">Save</button><button type="button" class="ghost" id="s_key" data-t="gen_key">New key</button><button type="button" class="ghost" id="s_clearkey" data-t="clear_key">Remove key</button><button type="button" class="ghost danger" id="s_del" data-t="del">Delete</button><button type="button" id="s_test" data-t="b_test">Test</button></div>
+          <div class="msg" id="srcmsg" style="padding:8px 0 0"></div>
+          <pre id="srckey" hidden></pre>
+        </div>
       </div>
     </div>
     <div class="pane" id="p-test" hidden>
@@ -391,7 +403,10 @@ h1 { font-size: 1.25rem; }
           <div class="msg" style="padding:0 0 4px" data-t="ex_note">One click sends a real notification to your TV, so you can see what it looks like.</div>
           <div class="exgrid">
             <button type="button" class="exbtn" data-ex="goal"><b data-t="ex_goal">Goal alert</b><small data-t="ex_goal_d">Bottom toast, goal sound, sport look</small></button>
+            <button type="button" class="exbtn" data-ex="civil"><b data-t="ex_civil">Civil protection</b><small data-t="ex_civil_d">Urgent red warning on the full screen</small></button>
+            <button type="button" class="exbtn" data-ex="weather"><b data-t="ex_weather">Weather</b><small data-t="ex_weather_d">Bottom toast with a soft sound</small></button>
             <button type="button" class="exbtn" data-ex="news"><b data-t="ex_news">Breaking news</b><small data-t="ex_news_d">Full screen with the news background</small></button>
+            <button type="button" class="exbtn" data-ex="reminder"><b data-t="ex_reminder">Reminder</b><small data-t="ex_reminder_d">The standard TV notification, with a chime</small></button>
             <button type="button" class="exbtn" data-ex="bell"><b data-t="ex_bell">Doorbell</b><small data-t="ex_bell_d">Warning on top of the picture, with a sound</small></button>
             <button type="button" class="exbtn" data-ex="simple"><b data-t="ex_simple">Simple message</b><small data-t="ex_simple_d">The standard TV notification</small></button>
           </div>
@@ -446,6 +461,8 @@ h1 { font-size: 1.25rem; }
         </div>
         <div>
           <h3 data-t="q_title">Quiet hours</h3>
+          <div class="msg" data-t="q_all">They apply to every Shard. A sender allowed to send urgent ones passes them.</div>
+          <div class="row"><button type="button" class="ghost" id="q_senders" data-t="q_senders">Senders and rules</button></div>
           <div class="setting"><label for="q_on" id="q_on-name" data-t="q_on">Quiet hours</label><label class="switch"><input type="checkbox" role="switch" id="q_on" aria-labelledby="q_on-name"><span aria-hidden="true"></span></label></div>
           <div class="rulesgrid">
             <div><label class="lab" for="q_from" data-t="q_from">From (HH:MM)</label><input type="time" id="q_from"></div>
@@ -475,6 +492,8 @@ h1 { font-size: 1.25rem; }
         <div>
           <h3 data-t="ok_title">Is everything working?</h3>
           <ul id="statuslist"></ul>
+          <h3 data-t="sn_title">Senders</h3>
+          <ul id="seenlist"></ul>
           <h3 data-t="app">Companion app</h3>
           <div class="msg" style="padding:0 0 10px" data-t="appnote">Launches NotifCtr01.NotifCenter (fixed id). It must be installed on the TV, see the README.</div>
           <h3 data-t="curl">Send from another device</h3>
@@ -495,6 +514,7 @@ h1 { font-size: 1.25rem; }
         <div>
           <h3 data-t="recent">Recently sent</h3>
           <div class="row"><button class="ghost" id="refresh" type="button" data-t="refresh">Refresh</button></div>
+          <div class="tabs" id="recfilter"></div>
           <ul id="recent"></ul>
           <div class="msg" id="recmsg"></div>
         </div>
@@ -636,12 +656,32 @@ h1 { font-size: 1.25rem; }
     }
     p.then(function () { end("done"); }, function () { end("fail"); });
   }
+  var recFilter = "all", failed = 0;
+  var BAD = { failed: 1, rejected: 1, dropped: 1 }, WARN = { merged: 1, suppressed: 1, replaced: 1, expired: 1 };
+  function statChip(st) { st = st || "queued"; return '<span class="chip ' + (st === "shown" ? "g" : BAD[st] ? "r" : WARN[st] ? "y" : "plain") + '">' + esc(tr("o_" + st)) + "</span>"; }
+  function outcome(r) { return tr("o_" + (r.status || "queued")) + (r.reason ? ": " + r.reason : ""); }
+  // Something did not arrive: a chip in the top bar opens the log on those.
+  function failChip() {
+    var old = $("failchip");
+    if (old) { old.parentNode.removeChild(old); }
+    if (!failed) { return; }
+    $("chips").insertAdjacentHTML("afterbegin", '<button type="button" class="chip r" id="failchip">' + esc(failed + " " + tr("n_failed")) + "</button>");
+    $("failchip").addEventListener("click", function () { recFilter = "failed"; document.querySelector('[data-pane="p-tech"]').click(); recent().catch(function () {}); });
+  }
   function recent() {
     return api("recent").then(function (d) {
-      lastRecent = d.recent;
-      $("recent").innerHTML = d.recent.length ? d.recent.map(function (n, i) {
+      var all = d.recent, keys = ["all", "failed"], list;
+      all.forEach(function (n) { if (n.source && keys.indexOf(n.source) < 0) { keys.push(n.source); } });
+      if (keys.indexOf(recFilter) < 0) { recFilter = "all"; }
+      failed = all.filter(function (n) { return BAD[n.status] === 1; }).length;
+      failChip();
+      list = all.filter(function (n) { return recFilter === "all" || (recFilter === "failed" ? BAD[n.status] === 1 : n.source === recFilter); });
+      lastRecent = list;
+      $("recfilter").innerHTML = keys.map(function (k) { return '<button type="button" class="tab' + (k === recFilter ? " on" : "") + '" aria-pressed="' + (k === recFilter) + '" data-f="' + esc(k) + '">' + esc(k === "all" || k === "failed" ? tr("f_" + k) : k) + "</button>"; }).join("");
+      Array.prototype.forEach.call($("recfilter").children, function (b) { b.addEventListener("click", function () { recFilter = this.getAttribute("data-f"); recent().catch(function () {}); }); });
+      $("recent").innerHTML = list.length ? list.map(function (n, i) {
         return '<li style="--c:' + (COLORS[n.level] || COLORS.info) + '"><span class="dot"></span><div><b>' + esc(n.title || tr("notitle")) + "</b> " + esc(n.message) +
-          "<small>" + new Date(n.at).toLocaleTimeString() + "</small></div>" +
+          "<small>" + esc([n.source, n.category, new Date(n.at).toLocaleTimeString(), n.reason].filter(Boolean).join(" \u00B7 ")) + "</small>" + statChip(n.status) + "</div>" +
           '<button type="button" class="ghost rs" data-i="' + i + '">' + esc(tr("resend")) + "</button></li>";
       }).join("") : '<li class="empty">' + esc(tr("none")) + "</li>";
       var rb = $("recent").getElementsByClassName("rs"), k;
@@ -649,9 +689,9 @@ h1 { font-size: 1.25rem; }
         rb[k].addEventListener("click", function () {
           var n = lastRecent[parseInt(this.getAttribute("data-i"), 10)];
           if (!n) { return; }
-          act(this, api("notify", { title: n.title, message: n.message, level: n.level, icon: n.icon, image: n.image, wallpaper: n.wallpaper, mode: n.mode, sound: n.sound, volume: n.volume, group: false, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked })
-            .then(function () { $("recmsg").textContent = tr("resent"); $("recmsg").className = "msg ok"; recent(); })
-            .catch(function (e) { $("recmsg").textContent = e.message; $("recmsg").className = "msg err"; throw e; }));
+          act(this, api("notify", { title: n.title, message: n.message, level: n.level, icon: n.icon, image: n.image, wallpaper: n.wallpaper, mode: n.mode, sound: n.sound, volume: n.volume || undefined, source: n.source, category: n.category, group: false, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked })
+            .then(function (r) { $("recmsg").textContent = outcome(r); $("recmsg").className = "msg ok"; recent(); })
+            .catch(function (e) { $("recmsg").textContent = e.message; $("recmsg").className = "msg err"; recent(); throw e; }));
         });
       }
     }).catch(function (e) { say(e.message, "err"); throw e; });
@@ -671,7 +711,7 @@ h1 { font-size: 1.25rem; }
       flask: '<path d="M9 3h6M10 3v6l-5.2 9.1A2 2 0 0 0 6.5 21h11a2 2 0 0 0 1.7-2.9L14 9V3"/><path d="M7.4 15h9.2"/>',
       code: '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>'
     };
-    var ICON = { set_notif: "tv", r_title: "shield", recent: "clock", ex_title: "flask", clubs_title: "tv", t_show: "tv", t_sound: "sound", t_goodie: "sound", ok_title: "shield", set_sound: "sound", t_custom: "sound", cp_title: "clock", set_toast: "tv", q_title: "clock", th_title: "tv", src_title: "shield", h_title: "code", app: "tv", curl: "code", rq_title: "code", api_title: "code", api_try: "flask" };
+    var ICON = { ed_title: "shield", sn_title: "shield",set_notif: "tv", r_title: "shield", recent: "clock", ex_title: "flask", clubs_title: "tv", t_show: "tv", t_sound: "sound", t_goodie: "sound", ok_title: "shield", set_sound: "sound", t_custom: "sound", cp_title: "clock", set_toast: "tv", q_title: "clock", th_title: "tv", src_title: "shield", h_title: "code", app: "tv", curl: "code", rq_title: "code", api_title: "code", api_try: "flask" };
     var boxes = document.querySelectorAll("#devwrap .appcols > div, #p-tech"), i, j, box, kids, card, el, h, key, span;
     for (i = 0; i < boxes.length; i++) {
       box = boxes[i]; kids = Array.prototype.slice.call(box.children); card = null;
@@ -798,7 +838,7 @@ h1 { font-size: 1.25rem; }
     if (!$("message").value.trim()) { say(tr("need_msg"), "err"); $("message").focus(); return; }
     say(tr("sending"));
     act(this, api("notify", { title: $("title").value, message: $("message").value, level: level, icon: $("icon").value, image: $("image").value, app: $("app").value, theme: $("theme").value, priority: $("priority").value, action: actionObj(), wallpaper: $("wallpaper").value, mode: mode, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked, sound: $("sound").value, group: false })
-      .then(function (r) { say(r.open === "not requested" ? tr("queuedq") : tr("queued"), "ok"); $("message").value = ""; preview(); recent().catch(function () {}); })
+      .then(function (r) { say(outcome(r), r.status === "suppressed" || r.status === "failed" ? "err" : "ok"); $("message").value = ""; preview(); recent().catch(function () {}); })
       .catch(function (e) { say(e.message, "err"); throw e; }));
   });
   $("message").addEventListener("keydown", function (e) { if (e.key === "Enter") { $("send").click(); } });
@@ -891,6 +931,7 @@ h1 { font-size: 1.25rem; }
       function chip(ok, t) { return '<span class="chip ' + (ok === true ? "g" : ok === false ? "r" : "y") + '">' + esc(t) + "</span>"; }
       $("chips").innerHTML = chip(s.app, tr("c_app") + (s.app && s.appVersion ? " " + s.appVersion : "")) + chip(s.service, tr("c_svc")) + chip(s.pairing === "on" ? true : null, tr(s.pairing === "on" ? "c_pair_on" : "c_pair_off")) +
         '<span class="chip plain">v' + esc(s.version) + "</span>";
+      failChip();
       // quiet hours explain why a notification does not show: a chip only while they are switched on
       api("settings").then(function (d) {
         var q = d.settings.quiet;
@@ -966,8 +1007,11 @@ h1 { font-size: 1.25rem; }
   (function () {
     var b = document.querySelectorAll("[data-ex]"), i;
     var EX = {
-      goal: function () { return { title: tr("ex_goal_t"), message: tr("ex_goal_m"), level: "ok", mode: "overlay", theme: "sport", sound: "chime", duration: 8, group: false }; },
-      news: function () { return { title: tr("ex_news_t"), message: tr("ex_news_m"), level: "info", mode: "full", theme: "news", duration: 12, group: false }; },
+      goal: function () { return { category: "goal", title: tr("ex_goal_t"), message: tr("ex_goal_m"), level: "ok", mode: "overlay", theme: "sport", sound: "chime", duration: 8, group: false }; },
+      civil: function () { return { category: "civil", title: tr("ex_civil_t"), message: tr("ex_civil_m"), level: "alert", mode: "full", sound: "alert", priority: "high", duration: 12, group: false }; },
+      weather: function () { return { category: "weather", title: tr("ex_weather_t"), message: tr("ex_weather_m"), level: "warn", icon: "\u2614", mode: "overlay", sound: "soft", duration: 10, group: false }; },
+      reminder: function () { return { category: "reminder", title: tr("ex_reminder_t"), message: tr("ex_reminder_m"), level: "info", icon: "\u23F0", mode: "banner", sound: "chime", duration: 8, group: false }; },
+      news: function () { return { category: "news", title: tr("ex_news_t"), message: tr("ex_news_m"), level: "info", mode: "full", theme: "news", duration: 12, group: false }; },
       bell: function () { return { title: tr("ex_bell_t"), message: tr("ex_bell_m"), level: "warn", mode: "overlay", sound: "alert", duration: 10, group: false }; },
       simple: function () { return { title: tr("ex_simple_t"), message: tr("ex_simple_m"), level: "info", mode: "banner", duration: 8, group: false }; }
     };
@@ -1030,28 +1074,81 @@ h1 { font-size: 1.25rem; }
 
     var SRC = {}, HOOKS = {};
     function pick(btn) { var all = btn.parentNode.parentNode.querySelectorAll(".rl"), i; for (i = 0; i < all.length; i++) { all[i].setAttribute("aria-pressed", all[i] === btn); } }
+    var SEEN = {}, own = Object.prototype.hasOwnProperty;
+    function ago(at) { var m = Math.round((Date.now() - at) / 60000); return !at ? "" : m < 1 ? tr("t_now") : m < 60 ? m + " min" : m < 1440 ? Math.round(m / 60) + " h" : Math.round(m / 1440) + " d"; }
+    function opts(list, cur, none) { return '<option value="">' + esc(none) + "</option>" + list.map(function (v) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(v) + "</option>"; }).join(""); }
+    // Defaults per category, one folded block each; empty = those of the sender.
+    function paintCats(names, saved) {
+      var sounds = Array.prototype.map.call($("s_sound").options, function (o) { return o.value; }).filter(Boolean);
+      $("s_cats").innerHTML = names.length ? names.map(function (c) {
+        var v = own.call(saved, c) ? saved[c] : {};
+        return '<details class="help" data-cat="' + esc(c) + '"><summary>' + esc(c) + '</summary><div class="rulesgrid">' +
+          '<label class="lab">' + esc(tr("f_mode")) + '<select data-f="mode">' + opts(["banner", "full", "both", "overlay"], v.mode, tr("use_src")) + "</select></label>" +
+          '<label class="lab">' + esc(tr("f_sound")) + '<select data-f="sound">' + opts(sounds, v.sound, tr("use_src")) + "</select></label>" +
+          '<label class="lab">' + esc(tr("f_vol")) + '<input type="text" inputmode="numeric" data-f="volume" maxlength="3" value="' + esc(v.volume || "") + '"></label>' +
+          '<label class="lab">' + esc(tr("f_dur")) + '<input type="text" inputmode="numeric" data-f="duration" maxlength="2" value="' + esc(v.duration || "") + '"></label></div></details>';
+      }).join("") : '<div class="msg">' + esc(tr("no_cat")) + "</div>";
+    }
+    function readCats() {
+      var out = {};
+      Array.prototype.forEach.call($("s_cats").querySelectorAll("[data-cat]"), function (box) {
+        var o = {};
+        Array.prototype.forEach.call(box.querySelectorAll("[data-f]"), function (el) { var f = el.getAttribute("data-f"); if (el.value) { o[f] = f === "volume" || f === "duration" ? parseInt(el.value, 10) || 0 : el.value; } });
+        out[box.getAttribute("data-cat")] = o;
+      });
+      return out;
+    }
+    function edit(n) {
+      var p = own.call(SRC, n) ? SRC[n] : {}, cats = (own.call(SEEN, n) ? SEEN[n].categories : []).slice();
+      Object.keys(p.categories || {}).forEach(function (c) { if (cats.indexOf(c) < 0) { cats.push(c); } });
+      $("s_name").value = n; $("s_icon").value = p.icon || ""; $("s_level").value = p.level || ""; $("s_mode").value = p.mode || ""; $("s_theme").value = p.theme || ""; $("s_priority").value = p.priority || "";
+      $("s_dur").value = p.duration || ""; $("s_rate").value = p.rate || ""; $("s_sound").value = p.sound || ""; $("s_vol").value = p.volume || ""; $("s_on").checked = p.enabled !== false; $("srckey").hidden = true;
+      $("s_asound").checked = p.allowSound !== false; $("s_amode").checked = p.allowMode !== false; $("s_aurgent").checked = p.allowUrgent !== false;
+      paintCats(cats, p.categories || {});
+      whyNot();
+    }
+    // A control that is not allowed stays visible: this says what the TV does instead.
+    function whyNot() {
+      var out = [], m = $("s_mode").value, snd = $("s_sound").value;
+      function cats(f) { return Array.prototype.some.call($("s_cats").querySelectorAll('[data-f="' + f + '"]'), function (el) { return !!el.value; }) ? " " + tr("why_cats") : ""; }
+      if (!$("s_asound").checked) { out.push(tr("why_sound").replace("{x}", snd || tr("why_nosound")) + cats("sound")); }
+      if (!$("s_amode").checked) { out.push(tr("why_mode").replace("{x}", tr("m_" + (m || "banner"))) + cats("mode")); }
+      if (!$("s_aurgent").checked) { out.push(tr($("s_priority").value === "high" ? "why_high" : "why_urgent")); }
+      $("s_why").textContent = out.join("\n");
+    }
+    ["s_asound", "s_amode", "s_aurgent", "s_sound", "s_mode", "s_priority", "s_cats"].forEach(function (id) { $(id).addEventListener("change", whyNot); });
     function loadSources() {
       return api("profiles").then(function (d) {
-        SRC = d.profiles;
-        var names = Object.keys(SRC);
+        SRC = d.profiles; SEEN = d.seen || {};
+        var names = Object.keys(SRC).concat(Object.keys(SEEN).filter(function (n) { return !own.call(SRC, n); }));
         $("srclist").innerHTML = names.length ? names.map(function (n) {
-          var p = SRC[n];
-          return '<li><button type="button" class="rl" aria-pressed="false" data-n="' + esc(n) + '"><b>' + esc(n) + "</b><small>" + esc([p.enabled ? "" : tr("off"), p.icon, p.level, p.mode, p.duration ? p.duration + " s" : "", p.rate ? p.rate + "/min" : "", p.sound ? "\u266A " + p.sound : "", p.hasKey ? tr("haskey") : ""].filter(Boolean).join(" · ")) + "</small></button></li>";
+          var p = own.call(SRC, n) ? SRC[n] : null, q = own.call(SEEN, n) ? SEEN[n] : { categories: [], at: 0 };
+          var tag = !p ? (q.opened ? "" : '<span class="chip y">' + esc(tr("t_new")) + "</span>") : p.enabled ? "" : '<span class="chip r">' + esc(tr("off")) + "</span>";
+          return '<li><button type="button" class="rl" aria-pressed="false" data-n="' + esc(n) + '"><b>' + esc(n) + "</b>" + tag + "<small>" + esc([q.categories.join(", "), ago(q.at), p && p.hasKey ? tr("haskey") : ""].filter(Boolean).join(" \u00B7 ")) + "</small></button></li>";
         }).join("") : '<li class="empty">' + esc(tr("no_src")) + "</li>";
-        var li = $("srclist").getElementsByClassName("rl"), i;
-        for (i = 0; i < li.length; i++) {
-          li[i].addEventListener("click", function () {
-            var n = this.getAttribute("data-n"), p = SRC[n];
-            pick(this);
-            $("s_name").value = n; $("s_icon").value = p.icon; $("s_level").value = p.level; $("s_mode").value = p.mode; $("s_theme").value = p.theme || ""; $("s_priority").value = p.priority || "";
-            $("s_dur").value = p.duration || ""; $("s_rate").value = p.rate || ""; $("s_sound").value = p.sound || ""; $("s_vol").value = p.volume || ""; $("s_on").checked = p.enabled; $("srckey").hidden = true;
-          });
-        }
+        $("seenlist").innerHTML = Object.keys(SEEN).length ? Object.keys(SEEN).map(function (n) { return "<li><b>" + esc(n) + "</b> <small>" + esc(ago(SEEN[n].at)) + "</small></li>"; }).join("") : '<li class="empty">' + esc(tr("no_src")) + "</li>";
+        Array.prototype.forEach.call($("srclist").getElementsByClassName("rl"), function (el) { el.addEventListener("click", function () { var n = this.getAttribute("data-n"); pick(this); edit(n); opened(this, n); }); });
       }).catch(function (e) { note("srcmsg", e.message, "err"); });
     }
+    function opened(btn, n) {
+      var chip = btn.querySelector(".chip.y");
+      if (!chip) { return; }
+      btn.removeChild(chip);
+      if (own.call(SEEN, n)) { SEEN[n].opened = true; }
+      api("profiles", { source: n, opened: true }).catch(function () { /* it shows as new again next time */ });
+    }
+    $("s_add").addEventListener("click", function () { edit(""); $("s_name").focus(); });
+    $("q_senders").addEventListener("click", function () { document.querySelector('[data-pane="p-rules"]').click(); });
+    $("s_test").addEventListener("click", function () {
+      var n = srcName(), cat = $("s_cats").querySelector("[data-cat]");
+      if (!n) { note("srcmsg", tr("needname"), "err"); return; }
+      act(this, api("notify", { source: n, category: cat ? cat.getAttribute("data-cat") : "", title: n, message: tr("ex_simple_m"), group: false })
+        .then(function (r) { note("srcmsg", outcome(r), "ok"); recent().catch(function () {}); }, fail("srcmsg")));
+    });
+    edit("");
     function srcName() { return $("s_name").value.trim().toLowerCase(); }
     $("s_save").addEventListener("click", function () {
-      act(this, api("profiles", { source: srcName(), icon: $("s_icon").value, level: $("s_level").value, mode: $("s_mode").value, theme: $("s_theme").value, priority: $("s_priority").value, duration: num("s_dur"), rate: num("s_rate"), sound: $("s_sound").value, volume: num("s_vol"), enabled: $("s_on").checked })
+      act(this, api("profiles", { source: srcName(), icon: $("s_icon").value, level: $("s_level").value, mode: $("s_mode").value, theme: $("s_theme").value, priority: $("s_priority").value, duration: num("s_dur"), rate: num("s_rate"), sound: $("s_sound").value, volume: num("s_vol"), enabled: $("s_on").checked, allowSound: $("s_asound").checked, allowMode: $("s_amode").checked, allowUrgent: $("s_aurgent").checked, categories: readCats() })
         .then(function () { note("srcmsg", tr("saved"), "ok"); return loadSources(); }, fail("srcmsg")));
     });
     $("s_key").addEventListener("click", function () {
@@ -1125,7 +1222,7 @@ h1 { font-size: 1.25rem; }
     loadSources(); loadSettings(); loadHooks();
     // The two lists are drawn when they load: draw them again when the language changes.
     var baseApplyLangRules = applyLang;
-    applyLang = function () { baseApplyLangRules(); loadSources().catch(function () {}); loadHooks().catch(function () {}); };
+    applyLang = function () { baseApplyLangRules(); whyNot(); loadSources().catch(function () {}); loadHooks().catch(function () {}); };
   })();
 
   // Sounds: the list comes from the Shard (GET sounds); this Shard plays them with one fixed paplay command. Used by the send form, the source and webhook
@@ -1295,6 +1392,21 @@ h1 { font-size: 1.25rem; }
     ["tbao", "Show banners as a bottom toast", "Mostrar os banners como barra em baixo"], ["b_test", "Test", "Testar"], ["f_one", "One sound for everything", "Um som para tudo"], ["one_none", "Each keeps its own", "Cada um fica com o seu"],
     ["r_title", "Repeats and unknown senders", "Repeti\u00E7\u00F5es e emissores desconhecidos"], ["b_reset", "Reset settings", "Repor defini\u00E7\u00F5es"], ["reset_done", "Settings reset", "Defini\u00E7\u00F5es repostas"],
     ["q_reset", "Reset all settings to their defaults? Senders, webhooks, sounds and wallpapers are kept.", "Repor todas as defini\u00E7\u00F5es? Os emissores, webhooks, sons e wallpapers ficam."]
+  ].forEach(function (w) { T.en[w[0]] = w[1]; T.pt[w[0]] = w[2]; });
+  [["al_title", "What this sender may decide", "O que este emissor pode decidir"], ["s_asound", "Choose the sound", "Escolher o som"], ["s_amode", "Choose how it appears", "Escolher como aparece"],
+    ["s_aurgent", "Send urgent ones (they pass quiet hours)", "Enviar urgentes (passam o sil\u00EAncio)"], ["cat_title", "Categories", "Categorias"], ["no_cat", "No categories yet: they appear when the sender uses them.", "Ainda sem categorias: aparecem quando o emissor as usar."],
+    ["use_src", "As the sender", "Como o emissor"], ["s_add", "Add a sender", "Acrescentar emissor"], ["ed_title", "Sender", "Emissor"], ["sn_title", "Senders", "Emissores"], ["t_new", "New", "Novo"], ["t_now", "now", "agora"],
+    ["src_title", "Senders", "Emissores"], ["no_src", "No Shard has sent anything yet.", "Ainda nenhum Shard enviou avisos."], ["n_failed", "not delivered", "n\u00E3o entregues"], ["f_all", "All", "Todos"], ["f_failed", "Failed", "Falhados"],
+    ["q_all", "They apply to every Shard. A sender allowed to send urgent ones passes them.", "Valem para todos os Shards. Um emissor autorizado a enviar urgentes passa-as."], ["q_senders", "Senders and rules", "Emissores e regras"],
+    ["o_queued", "Queued", "Em fila"], ["o_shown", "Shown", "Mostrado"], ["o_merged", "Merged", "Juntado"], ["o_suppressed", "Silenced", "Silenciado"], ["o_replaced", "Replaced", "Substitu\u00EDdo"], ["o_expired", "Expired", "Expirado"], ["o_failed", "Failed", "Falhou"], ["o_rejected", "Refused", "Recusado"], ["o_dropped", "Dropped", "Descartado"]
+  ].forEach(function (w) { T.en[w[0]] = w[1]; T.pt[w[0]] = w[2]; });
+  [["why_sound", "Sound: what this sender asks for, volume included, is ignored. The TV plays: {x}.", "Som: o que este emissor pedir, volume inclu\u00EDdo, \u00E9 ignorado. A TV toca: {x}."], ["why_nosound", "no sound", "nenhum som"],
+    ["why_mode", "Look: what this sender asks for is ignored. It appears as: {x}.", "Aspeto: o que este emissor pedir \u00E9 ignorado. Aparece como: {x}."], ["why_cats", "A category with its own choice keeps it.", "Uma categoria com escolha pr\u00F3pria mant\u00E9m-na."],
+    ["why_urgent", "Urgency: its urgent notifications count as normal. They wait their turn and quiet hours hold them.", "Urg\u00EAncia: os avisos urgentes deste emissor contam como normais. Esperam a vez e o sil\u00EAncio ret\u00E9m-nos."],
+    ["why_high", "Urgency: what this sender asks for is ignored, but all its notifications are urgent because of the choice above.", "Urg\u00EAncia: o que este emissor pedir \u00E9 ignorado, mas todos os avisos dele s\u00E3o urgentes pela escolha acima."],
+    ["ex_civil", "Civil protection", "Prote\u00E7\u00E3o Civil"], ["ex_civil_d", "Urgent red warning on the full screen", "Aviso vermelho urgente em ecr\u00E3 inteiro"], ["ex_civil_t", "Civil protection: red warning", "Prote\u00E7\u00E3o Civil: aviso vermelho"], ["ex_civil_m", "Heavy rain and wind until 18:00. Avoid travelling.", "Chuva e vento fortes at\u00E9 \u00E0s 18:00. Evite deslocar-se."],
+    ["ex_weather", "Weather", "Tempo"], ["ex_weather_d", "Bottom toast with a soft sound", "Barra em baixo com um som suave"], ["ex_weather_t", "Rain this afternoon", "Chuva \u00E0 tarde"], ["ex_weather_m", "14 \u00B0C, take an umbrella.", "14 \u00B0C, leve guarda-chuva."],
+    ["ex_reminder", "Reminder", "Lembrete"], ["ex_reminder_d", "The standard TV notification, with a chime", "A notifica\u00E7\u00E3o normal da TV, com um toque"], ["ex_reminder_t", "Starting soon", "Quase a come\u00E7ar"], ["ex_reminder_m", "The evening news starts in 5 minutes.", "O telejornal come\u00E7a daqui a 5 minutos."]
   ].forEach(function (w) { T.en[w[0]] = w[1]; T.pt[w[0]] = w[2]; });
   applyLang();
   loadStatus(); loadApi();

@@ -39,7 +39,11 @@ JSON body. Only `message` is required.
 | `wallpaper` | http/https URL, max 290 | none | A darkened full-screen background behind the card. Can be combined with `image`. |
 | `seconds` | integer 5-300 | `30` | How long it may wait in the queue (always at least `duration` + 20). |
 | `open` | boolean | `true` | `false` only queues it, without launching the app or its service. |
-| `source` | string, max 32 (`a-z 0-9 . _ -`) | none | Who is sending (or the header `X-NC-Source`). If a source with that name exists, its defaults, key, on/off switch and rate limit apply, see "Sources". |
+| `category` | string, max 24 (`a-z 0-9 _ -`) | none | What kind of notification it is, for example `goal`, `civil`, `weather`, `news`, `reminder`. A source can have its own defaults per category. |
+| `ttl` | integer, 1-3600 | none | After this many seconds it is no longer shown (it replaces `seconds`). |
+| `replace` | string, max 40 | none | A key of your own, for example `match-123`: a new notification of the same source with it replaces the one that waits, or the bar on screen. Never merged as a repeat. |
+| `source` | string, max 32 (`a-z 0-9 . _ -`) | none | Who is sending (or the header `X-NC-Source`). If a source with that name exists, its defaults, allow switches, key, on/off switch and rate limit apply, see "Sources". |
+| `key` | string, 8-64 | none | The key of the source, when it has one: this field, or the header `X-NC-Key` (which wins). `ntfy` and webhooks take the header only. It is never stored with the notification. |
 | `group` | boolean | `true` | `false` = never merge this notification with an identical recent one (the panel sends `false` for Resend and the test buttons, so they always show). Merging only happens while the setting `groupSeconds` is above 0. |
 | `sound` | `chime` `soft` `reward` `success` `alert` `rotation` `open` `poweron`, or the name of one of your own uploaded sounds (`GET sounds`, `custom`) | none | Plays that TV system sound, or your own sound, with the notification. Played by this Shard itself (one fixed `paplay` command), at most one sound every 0.8 s. It plays when the notification appears, not when it is queued: in `banner` mode it plays when the banner service has shown the banner, or `soundDelayMs` after the request (default 3 s, at most 10 s); in `full` and `both` when the app screen asks for the card (at most 10 s after the request); with `open: false` (nothing is shown) it plays at once. At most 8 sounds wait at the same time; a request over that gets `"sound":"skipped"`. Not played for a notification held back by quiet hours or merged as a repeat. |
 | `volume` | integer 10-100 | `100` | Volume of the sound, in percent. A number below 10 is raised to 10 and above 100 lowered to 100 (so `volume: 0` is the quietest, never the loudest); missing or not a number means `100`. For the default volume of a source or a webhook, `0` or an empty value clears it. |
@@ -48,7 +52,7 @@ Answer: `{"ok":true,"id":"1-abc","open":"requested","sound":"none"}` (`sound` is
 Two other answers are still `200`: during quiet hours `{"ok":true,"id":"...","suppressed":"quiet hours"}` (recorded in `GET recent`, not shown), and a repeat inside the grouping window `{"ok":true,"id":"...","merged":true,"count":2}`.
 
 Notes:
-- `image` and `wallpaper` are fetched **by the Shard** (the app may only load origins it declares) and served back to the app. Up to 3 redirects, 8 s, 3 MB, png/jpeg/gif/webp/bmp only.
+- `image` and `wallpaper` are fetched **by the Shard** (the app may only load origins it declares) and served back to the app. Up to 3 redirects, 3 MB, png/jpeg/gif/webp/bmp only. Time limits: a connection that stays silent for **8 s** is given up, and a whole download (redirects included) is stopped after **10 s**, however slowly it sends. At most 2 downloads run at once and 8 wait.
   The URL may be on your LAN (a camera snapshot). A picture that cannot be fetched shows "FAILED to load" with its address on the card.
 - The native banner (`mode: banner`) takes plain text and a duration only: no image, no colour. Use `full` or `both` for pictures, or `overlay` for a bar with a colour and a small icon.
 - `overlay` shows one bar at a time (a new one replaces the one still up), is not queued and does not launch any app, so it is not in `GET notifications`; it is recorded in `GET recent`. Its picture must be a **PNG** (up to 2 MB and 1024x1024, 8 bits per channel, not interlaced; the helper decodes it itself and draws it with rounded corners); any other `image` type is ignored and the bar has no icon. The answer's `open` is `requested`, `unavailable` (no `exec` permission) or `error` (the helper could not be unpacked). The sound of an overlay plays at once, not after `soundDelayMs`.
@@ -99,6 +103,26 @@ rest_command:
     payload: '{"title":"{{ title }}","message":"{{ message }}","level":"{{ level | default(''info'') }}"}'
 ```
 
+## What happened to it
+
+`GET api` lists `features: ["category","status","ttl","replace","policy"]`; an older Notification Center has no `features`.
+
+Every answer to `notify` that is accepted has `status`, `reason` and `effective` (`{mode, sound, volume, duration}`, what the Notification Center will really use):
+
+| `status` | Meaning |
+|---|---|
+| `queued` | Accepted. Waiting for the TV to show it (banner, full screen, or a bar behind another bar). |
+| `shown` | The bar was started now. In `GET notify-status` also a card the app screen has fetched. The Samsung banner gives no confirmation and stays `queued`. |
+| `merged` | A repeat inside the grouping window: counted, not shown again. |
+| `suppressed` | Held by quiet hours. |
+| `failed` | The bar or the app could not be started (see `reason`). |
+
+Later, `GET notify-status?id=<id>` answers `{ok, id, status, reason, source, category}` for the last 20, where the status can also be `replaced`, `expired`, `dropped` or `rejected`.
+
+**Retrying:** a `429` (queue full, or over the source's rate) carries `Retry-After` and `retryAfter` in seconds: try again after it. Try again after a network error or a `5xx`; do not after `400` or `403`.
+
+The bar shows one notification at a time, each for its `duration`; at most 5 wait, urgent ones first.
+
 ## ntfy-compatible: `POST ntfy`
 
 For apps that already publish to ntfy. The body is the message; headers `Title`, `Priority` (`5` = alert, `4` = warning) and `Tags` (`warning`, `rotating_light`,
@@ -115,11 +139,11 @@ A sound can be chosen with the header `Sound` (or the JSON field `sound`, and `v
 | Route | Returns |
 |---|---|
 | `GET api` | This API as JSON: fields, enums, limits, routes, version. |
-| `GET notifications` | `{lang, notifications:[{id,title,message,level,mode,duration,icon,image,wallpaper,seconds}]}` (the active queue; `?js=1` for the script form used by the app). |
-| `GET recent` | `{recent:[{id,title,message,level,mode,duration,icon,image,wallpaper,at}]}` (the last 20 sent). |
+| `GET notifications` | `{lang, notifications:[{id,title,message,level,mode,duration,icon,image,wallpaper,priority,svc,action,seconds}]}` (the active queue; `?js=1` for the script form used by the app). `priority` is `"high"` or `""`; `action` is `{label}` or `null` (the app id stays in the Shard); `svc: true` (banners only) means the banner service posts that banner, because it reported in the last 10 minutes, so the app screen must not post it again; `seconds` is how long it still waits. |
+| `GET recent` | `{recent:[{id,title,message,level,mode,duration,icon,image,wallpaper,theme,priority,action,source,category,status,reason,sound,volume,at}]}` (the last 20, newest first, also the held back and refused ones). `action` is the button label; `status` and `reason` are explained in "What happened to it"; `at` is the time in milliseconds. `count` appears on one that repeats were merged into, `suppressed: true` on one held by quiet hours. A refused request has only `id,title,message,level,source,category,status,reason,at`. |
 | `GET img?id=<id>[&kind=wallpaper][&info=1]` | The picture of a queued notification; `info=1` returns `{ok,type,bytes}` or `{ok:false,error}` (use it to check a URL). |
 | `POST service-report` | Used by the banner service (companion app 0.2.4 or newer) to say what happened: `{stage, node, fetch, webapis, postFunction, source?, count?, fresh?, fileError?, netError?, error?, returned?, id?}`. Only these fields are kept, as short text; the last 8 are in `GET status`. Anyone who can reach the Shard can call it, so treat the content as a hint. |
-| `GET status` | `{version, app, appVersion, service, handoff, serviceDiag, pairing:"on"\|"off"\|"unknown"}`: is the companion app and its banner service installed, is Vetro pairing on, did the Shard write the queue file the banner service reads (`handoff`). `overlay` is `true` when the Shard may run the overlay helper. `screen` says when the full-screen app last reached the Shard: `{ntjsAgoS, pollAgoS, imgAgoS, from, open}` (seconds since it fetched `nt.js`, polled the queue and asked for a picture, or `null` if never; the address it came from; whether it is open now). It is for finding out where a full-screen card stops working (for example with Vetro pairing on). `serviceDiag` is `{launch, reports, file}`: what Vetro answered the last time the Shard asked it to start the banner service (`{at, status, body}` or `{at, error}`), the reports the service sent over the network, and the copy it left in a file (`null` if there is none the Shard can read). |
+| `GET status` | `{version, app, appVersion, service, handoff, serviceDiag, pairing:"on"\|"off"\|"unknown"}`: is the companion app and its banner service installed, is Vetro pairing on, `handoff`: did the Shard write the queue file the banner service reads. `overlay` is `true` when the Shard may run the overlay helper. `screen` says when the full-screen app last reached the Shard: `{ntjsAgoS, pollAgoS, imgAgoS, from, open}` (seconds since it fetched `nt.js`, polled the queue and asked for a picture, or `null` if never; the address it came from; whether it is open now). It is for finding out where a full-screen card stops working (for example with Vetro pairing on). `serviceDiag` is `{launch, reports, file}`: what Vetro answered the last time the Shard asked it to start the banner service (`{at, status, body}` or `{at, error}`), the reports the service sent over the network, and the copy it left in a file (`null` if there is none the Shard can read). |
 | `GET lang` / `POST lang` | Display language `{lang:"en"|"pt"}`, shared by the panel and the TV screen. |
 | `POST sound-upload?name=<name>` | Upload one of your own sounds: the raw bytes of a WAV (PCM 16 bit, mono or stereo, 8-48 kHz, at most 10 s and 1 MB) as the body, for example `curl -X POST --data-binary @goal.wav "http://<TV-IP>:8099/plugins/notification-center/api/sound-upload?name=goal"`. The name is 1-24 characters of `a-z`, `0-9` and `-` and cannot be one of the built-in sounds; at most 12 sounds. Answer `{ok,name,seconds}`; `400` for a bad name or a WAV the TV cannot play, `413` for more than 1 MB. Then send `sound: "goal"`. |
 | `POST sound-delete` | `{name}`: delete one of your own sounds (`404` if there is none with that name). |
@@ -139,8 +163,10 @@ A sound can be chosen with the header `Sound` (or the JSON field `sound`, and `v
 
 | Route | What it does |
 |---|---|
-| `GET profiles` | `{profiles:{<source>:{enabled,icon,level,mode,duration,rate,hasKey}}, max:20}`. The key is never returned. |
-| `POST profiles` | Create, change or delete one: `{source, icon?, level?, mode?, theme?, duration?, sound?, volume?, rate?, enabled?, key?, genKey?, delete?}`. `icon`, `level`, `mode`, `duration`, `sound` and `volume` fill in what the sender leaves out (the sender's own value always wins). `rate` is the most notifications per minute (`0` = no limit). `key` (8-64 characters; `""` clears it) makes the source require the header `X-NC-Key`; `genKey: true` creates a random key and returns it **once**. |
+| `GET profiles` | `{profiles:{<source>:{enabled,icon,level,mode,duration,rate,sound,volume,theme,priority,allowSound,allowMode,allowUrgent,categories,hasKey}}, seen:{<source>:{categories,at,opened}}, max:20}`. `seen` lists the sources that have sent something (`opened: true` once the panel has opened it). The key is never returned. |
+| `POST profiles` | Create, change or delete one: `{source, icon?, level?, mode?, theme?, duration?, sound?, volume?, rate?, enabled?, key?, genKey?, delete?}`. `icon`, `level`, `mode`, `duration`, `sound` and `volume` fill in what the sender leaves out (the sender's own value always wins). `rate` is the most notifications per minute (`0` = no limit). `key` (8-64 characters; `""` clears it) makes the source require the header `X-NC-Key`; `genKey: true` creates a random key and returns it **once**. `{source, opened: true}` only records that the panel opened a sender that has sent something (it loses the "New" mark); answer `{ok, source, opened}`. |
+
+**Who decides.** A source can have defaults and defaults per category (`categories: {goal: {mode, sound, volume, duration}}`). What the request says wins, unless the source does not allow it: `allowSound`, `allowMode` and `allowUrgent` (all `true` by default). With one of them `false`, the request's value is ignored and the source's (or category's) default applies. Quiet hours are set only here; `allowUrgent` decides who can pass them.
 
 **Settings:**
 
@@ -153,7 +179,7 @@ A sound can be chosen with the header `Sound` (or the JSON field `sound`, and `v
 
 | Route | What it does |
 |---|---|
-| `GET hooks` | `{hooks:{<name>:{title,message,level,icon,mode,duration,source}}, max:10, base}` |
+| `GET hooks` | `{hooks:{<name>:{title,message,level,icon,mode,duration,source,sound,volume}}, max:10, base}` |
 | `POST hooks` | Create, change or delete one: `{name, message, title?, level?, icon?, mode?, duration?, sound?, volume?, source?, delete?}`. `name`: `a-z 0-9 -`, up to 24. The text fields are templates: `{{a.b.0.c}}` is replaced by that value of the posted JSON (a missing value gives an empty string; nothing is ever evaluated). `message` is required. |
 | `POST hook/<name>` | Send any JSON (up to 64 KB) to that hook. A body that is not JSON is available as `{{text}}`. The notification is sent as source `source`, or the hook's name if `source` is empty, so a source's key protects its hook. |
 
@@ -164,7 +190,8 @@ Example, GitHub pushes: `POST hooks` with `{"name":"github","title":"{{repositor
 - This Shard has the `exec` permission for exactly two fixed commands. (1) `paplay --volume=<integer> <file>`: the file is one of 8 fixed system files, or a WAV you uploaded into the Shard's own sound folder on the TV; a sound is chosen by name from a list the Shard keeps (an uploaded name is 1-24 characters of `a-z`, `0-9` and `-`, so it cannot contain a path or a shell character), and the volume is a clamped integer. Uploads are checked (WAV, PCM 16 bit, at most 10 s and 1 MB, at most 12 of them). (2) The overlay bar: `dotnet <dir>/ncoverlay.dll --file <dir>/job.txt`, plus closing the previous bar by its pid file (only if `/proc/<pid>/cmdline` contains `ncoverlay`); `<dir>` is a constant (`/home/owner/share/tmp/ncoverlay`), and the text, colour, seconds, opacity and icon path go into `job.txt`, one value per line, so no text from a request ever reaches a shell. The helper (source in `overlay/Overlay.cs`) only reads that file, clamps every value, and opens no sockets. In both cases no text from a request reaches a command. Anyone who can reach the Shard can make the TV play those sounds (at most one every 0.8 s); with pairing on they need a key.
 
 - A source key is stored in `ctx.config` on the TV in plain text and checked by the Shard. It stops **misconfigured** senders (a script that picks the wrong source, a service you did not mean to allow), **not hostile ones**: anyone who can reach the Shard can also read the list of sources and change or delete a profile, including its key (`POST profiles`). It travels in clear text on the LAN like the rest of the traffic. Use Vetro pairing to keep strangers out; use keys to keep your own senders apart. `GET profiles` never returns a key.
-- Anyone who can reach the Shard can change sources, settings and hooks, as they can change the language. Hooks and sources can only shape the text, icon, level, mode and duration of a notification: nothing can point the Shard at another app or run a command.
+- Anyone who can reach the Shard can change sources, settings and hooks, as they can change the language.
+- **What a sender defines.** A request chooses the text, look and duration, the sound and its volume, `priority` (which passes quiet hours), the picture and wallpaper addresses the Shard will fetch (also on your LAN) and the button of the card (`action`), which opens an installed app **only if somebody presses it**. A source's `allowSound`, `allowMode` and `allowUrgent` overrule the sound, the look and the urgency only for requests that carry that `source`: a sender that leaves it out, or uses another name, is not held by them (`strict` refuses unknown names; a key stops others from using a name). Webhook definitions and source profiles hold no `action` and no picture address of their own (a profile can name a theme). Nothing sent with a notification runs a command.
 
 - With pairing off, anyone who can reach the TV's port 8099 can send notifications and make the Shard fetch an image URL. Turn pairing on for shared networks.
 - The Shard only fetches `http`/`https` URLs, never `file:` or other schemes, and serves only image types.

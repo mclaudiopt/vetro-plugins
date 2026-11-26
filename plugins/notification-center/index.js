@@ -154,7 +154,7 @@ module.exports = function (ctx) {
 
     // Asks Vetro to launch the companion app (at most once every 10 s), or its background service (every time: it is
     // headless, so launching it only makes it read the queue and post the banner).
-    function openApp(service) {
+    function openApp(service, id) {
         var now = Date.now();
         if (!service) {
             // The app screen announces itself while it is open (it polls every 2 s and says goodbye when it leaves), so a notification
@@ -171,9 +171,12 @@ module.exports = function (ctx) {
             }, function (r) {
                 var answer = '';
                 r.on('data', function (d) { if (answer.length < 300) { answer += d; } });
-                r.on('end', function () { if (service) { serviceLaunch = { at: now, status: r.statusCode, body: clean(answer, 200) }; } });
+                r.on('end', function () {
+                    if (service) { serviceLaunch = { at: now, status: r.statusCode, body: clean(answer, 200) }; }
+                    if (r.statusCode >= 400) { setStatus(id, 'failed', 'could not open the app (http ' + r.statusCode + ')'); }
+                });
             });
-            rq.on('error', function (e) { if (service) { serviceLaunch = { at: now, error: clean(e && e.message, 200) }; } /* Vetro busy or app not installed */ });
+            rq.on('error', function (e) { if (service) { serviceLaunch = { at: now, error: clean(e && e.message, 200) }; } setStatus(id, 'failed', 'could not reach Vetro'); });
             rq.setTimeout(5000);   // the timeout option alone is ignored before Node 6.8
             rq.on('timeout', function () { rq.destroy(); });
             rq.write(body);
@@ -409,27 +412,48 @@ module.exports = function (ctx) {
     function overlayRun(note, iconPath, dir) {
         function line(v) { return str(v).replace(/[\r\n]+/g, ' '); }
         var job = [line(note.title), line(note.message), OVERLAY_COLORS[has(OVERLAY_COLORS, note.level) ? note.level : 'info'], note.duration, settingsNow().overlayOpacity, iconPath].join('\n') + '\n';
-        if (!putFile(dir + '/job.txt', job)) { return; }
+        if (!putFile(dir + '/job.txt', job)) { return setStatus(note.id, 'failed', 'could not write the bar'); }
         // A bar that is still up is closed first (its pid is only used while it really is our helper), then the new one starts in the background.
         var cmd = 'P=' + dir + '/pid; if [ -f $P ] && grep -q ncoverlay /proc/$(cat $P)/cmdline 2>/dev/null; then kill $(cat $P) 2>/dev/null; fi; ' +
             '( dotnet ' + dir + '/ncoverlay.dll --file ' + dir + '/job.txt >/dev/null 2>&1 & echo $! > $P ); echo started';
-        try { ctx.execute(cmd, 8000).then(function () { /* started */ }, function () { /* the bar is best effort */ }); } catch (e) { /* no exec */ }
+        try { ctx.execute(cmd, 8000).then(function () { setStatus(note.id, 'shown'); }, function () { setStatus(note.id, 'failed', 'the bar did not start'); }); } catch (e) { setStatus(note.id, 'failed', 'exec failed'); }
     }
+    // One bar at a time, each for its duration; urgent ones first. A new note with the same replace key takes the place of the one that waits,
+    // or of the one on screen. Nothing waits behind the bar after stop().
+    var MAX_BARS = 5, barQueue = [], barNow = null, barTimer = null;
+    var barSecondMs = ctx.overlay && typeof ctx.overlay.secondMs === 'number' ? ctx.overlay.secondMs : 1000;
+    function sameSlot(a, b) { return !!b.replace && a.replace === b.replace && a.source === b.source; }
+    function barFull(note) { return barQueue.length >= MAX_BARS && note.priority !== 'high' && !barQueue.some(function (n) { return sameSlot(n, note); }); }
+    function barShow(note, dir) {
+        barNow = note;
+        clearTimeout(barTimer);
+        if (barSecondMs > 0) { barTimer = setTimeout(function () { barNow = null; barNext(dir); }, note.duration * barSecondMs + 300); }
+        if (!note.image) { return overlayRun(note, '', dir); }
+        fetchImage(note.image, function (err, hit) {
+            if (barSecondMs > 0 && barNow !== note) { return; }   // a newer bar took its place while the picture was loading
+            var icon = '';
+            if (!err && hit && isPng(hit.buf) && putFile(dir + '/icon.png', hit.buf)) { icon = dir + '/icon.png'; }
+            overlayRun(note, icon, dir);
+        });
+    }
+    function barNext(dir) {
+        var n;
+        while ((n = barQueue.shift())) {
+            if (n.expires > Date.now()) { return barShow(n, dir); }
+            setStatus(n.id, 'expired', 'waited too long');
+        }
+    }
+    function barStop() { clearTimeout(barTimer); barQueue = []; barNow = null; }
     // Shows the bar. A PNG `image` becomes the icon on its left (fetched with the same bounded download as the full-screen card's pictures).
     function overlayShow(note) {
         if (!overlayAvailable()) { return 'unavailable'; }
         var dir = overlayInstall();
         if (!dir) { return 'error'; }
-        if (note.image) {
-            fetchImage(note.image, function (err, hit) {
-                var icon = '';
-                if (!err && hit && isPng(hit.buf) && putFile(dir + '/icon.png', hit.buf)) { icon = dir + '/icon.png'; }
-                overlayRun(note, icon, dir);
-            });
-            return 'requested';
-        }
-        overlayRun(note, '', dir);
-        return 'requested';
+        barQueue = barQueue.filter(function (n) { if (sameSlot(n, note)) { setStatus(n.id, 'replaced'); return false; } return true; });
+        if (!barNow || barSecondMs <= 0 || sameSlot(barNow, note)) { barShow(note, dir); return 'requested'; }
+        if (note.priority === 'high') { barQueue.unshift(note); } else { barQueue.push(note); }
+        while (barQueue.length > MAX_BARS) { setStatus(barQueue.pop().id, 'dropped', 'queue full'); }
+        return 'queued';
     }
 
     // The apps of the TV, for the suggestions of the action button: the panel may only call routes of this Shard.
@@ -460,6 +484,9 @@ module.exports = function (ctx) {
 
     // Installation status for the panel: is the companion app (and its service) installed, is Vetro pairing on, which Shard version.
     // Only known fields are kept, as short plain text or small numbers.
+    // The banner service reports what it does: while it is alive, the app screen must not post the banners again.
+    var serviceSeenAt = 0;
+    function serviceAlive() { return Date.now() - serviceSeenAt < 600000; }
     function cleanReport(v) {
         if (!rules.isObj(v) || !str(v.stage)) { return null; }
         var out = {};
@@ -472,7 +499,7 @@ module.exports = function (ctx) {
             var r;
             try { r = cleanReport(JSON.parse(raw)); } catch (e) { r = null; }
             if (!r) { return sendJson(res, 400, { error: 'a JSON object with a stage' }); }
-            r.at = Date.now();
+            r.at = serviceSeenAt = Date.now();
             serviceReports.push(r);
             if (serviceReports.length > MAX_REPORTS) { serviceReports.shift(); }
             sendJson(res, 200, { ok: true });
@@ -565,10 +592,11 @@ module.exports = function (ctx) {
         try { ver = require('./manifest.json').version; } catch (e) { /* manifest not readable */ }
         return {
             name: 'notification-center', version: ver, apiVersion: 1,
+            features: ['category', 'status', 'ttl', 'replace', 'policy'],
             base: '/plugins/notification-center/api/',
             auth: 'Same as the rest of Vetro: no key with pairing off; with pairing on, other devices send "Authorization: Bearer <key>". Shards on the same TV call http://127.0.0.1:8099 and need no key.',
             enums: { level: Object.keys(LEVELS), mode: Object.keys(MODES), sound: soundNames() },
-            limits: { title: MAX_TITLE, message: MAX_MESSAGE, queue: MAX_QUEUE, recent: MAX_RECENT, durationSeconds: [MIN_DURATION, MAX_DURATION], queueSeconds: [MIN_SECONDS, MAX_SECONDS], image: '3 MB, png/jpeg/gif/webp/bmp, http(s) URL up to 290 characters', relaunchAfterSeconds: MIN_RELAUNCH_MS / 1000 },
+            limits: { title: MAX_TITLE, message: MAX_MESSAGE, queue: MAX_QUEUE, recent: MAX_RECENT, durationSeconds: [MIN_DURATION, MAX_DURATION], queueSeconds: [MIN_SECONDS, MAX_SECONDS], image: '3 MB, png/jpeg/gif/webp/bmp, http(s) URL up to 290 characters; per download 8 s without data on a socket and 10 s in total, 3 redirects; 2 downloads at once', relaunchAfterSeconds: MIN_RELAUNCH_MS / 1000 },
             fields: {
                 message: { type: 'string', required: true, max: MAX_MESSAGE, note: 'The text of the notification.' },
                 title: { type: 'string', max: MAX_TITLE },
@@ -587,24 +615,29 @@ module.exports = function (ctx) {
                 sound: { type: 'string', enum: soundNames(), note: 'Plays one of the TV system sounds, or one of your own uploaded sounds (see GET sounds, custom), with the notification. Empty = no sound; one sound at most every 0.8 s. Not played for a notification held back by quiet hours or merged as a repeat.' },
                 volume: { type: 'integer', min: 10, max: 100, default: 100, note: 'Volume of the sound, in percent.' },
                 group: { type: 'boolean', default: true, note: 'false = never merge this notification with an identical recent one (the panel sends false for Resend and the test buttons). Merging only happens while the setting groupSeconds is above 0.' },
-                source: { type: 'string', max: 32, note: 'Who is sending (a-z, 0-9, . _ -), or the header X-NC-Source. If a profile with that name exists, its icon, level, mode and duration fill in what you leave out, and its key (header X-NC-Key), enabled flag and rate limit apply.' }
+                category: { type: 'string', max: 24, note: 'What kind of notification it is (a-z, 0-9, _ -), for example goal, civil, weather. A source can have its own defaults per category.' },
+                ttl: { type: 'integer', min: 1, max: 3600, note: 'After this many seconds it is no longer shown. It replaces seconds.' },
+                replace: { type: 'string', max: 40, note: 'A key of your own (for example match-123): a new notification of the same source with it replaces the one that waits or the bar on screen.' },
+                source: { type: 'string', max: 32, note: 'Who is sending (a-z, 0-9, . _ -), or the header X-NC-Source. If a profile with that name exists, its defaults (also per category) fill in what you leave out, its allow switches can overrule what you ask for, and its key, enabled flag and rate limit apply. It is only a name the sender states: without it that profile does not apply (strict refuses unknown names).' },
+                key: { type: 'string', max: 64, note: 'The key of the source, when its profile has one: this field of POST notify, or the header X-NC-Key (which wins). ntfy and webhooks take the header only. Never stored with the notification.' }
             },
             endpoints: [
-                { method: 'POST', path: 'notify', summary: 'Send a notification (JSON body with the fields above). With quiet hours it may answer {ok, id, suppressed}; a repeat inside the grouping window answers {ok, id, merged:true, count}.', returns: '{ok, id, open, sound}' },
+                { method: 'POST', path: 'notify', summary: 'Send a notification (JSON body with the fields above). With quiet hours it may answer {ok, id, suppressed}; a repeat inside the grouping window answers {ok, id, merged:true, count}.', returns: '{ok, id, status: queued|shown|merged|suppressed|failed, reason, effective:{mode,sound,volume,duration}, open, sound}; 429 {error, retryAfter} when the queue is full or over the rate' },
+                { method: 'GET', path: 'notify-status?id=<id>', summary: 'What happened to one of the last notifications: queued, shown, merged, suppressed, replaced, expired, dropped, rejected or failed.', returns: '{ok, id, status, reason, source, category}' },
                 { method: 'POST', path: 'ntfy', summary: 'ntfy-compatible publish: body = message; headers Title, Priority (5 alert, 4 warning), Tags; or JSON {message,title,priority,tags}.', returns: '{ok, id, open}' },
-                { method: 'GET', path: 'notifications', summary: 'The active queue (used by the app and its service); add ?js=1 for the script form.', returns: '{lang, notifications:[...]}' },
-                { method: 'GET', path: 'recent', summary: 'The last notifications sent.', returns: '{recent:[...]}' },
+                { method: 'GET', path: 'notifications', summary: 'The active queue (used by the app and its service); add ?js=1 for the script form.', returns: '{lang, notifications:[{id,title,message,level,mode,duration,icon,image,wallpaper,priority:"high"|"",svc,action:{label}|null,seconds}]}; svc true = the banner service posts that banner, so the app screen must not' },
+                { method: 'GET', path: 'recent', summary: 'The last 20, newest first, also the held back and refused ones.', returns: '{recent:[{id,title,message,level,mode,duration,icon,image,wallpaper,theme,priority,action,source,category,status,reason,sound,volume,at,count?,suppressed?}]}; action is the button label; a refused one has only id,title,message,level,source,category,status,reason,at' },
                 { method: 'GET', path: 'img?id=<id>[&kind=wallpaper][&info=1]', summary: 'The picture of a queued notification, fetched and served by the Shard; info=1 returns {ok,type,bytes}.', returns: 'image bytes or JSON' },
-                { method: 'GET', path: 'status', summary: 'Installation status: companion app, its service, Vetro pairing, Shard version.', returns: '{version, app, appVersion, service, pairing, sound, overlay, screen, serviceDiag:{launch,reports,file}}' },
+                { method: 'GET', path: 'status', summary: 'Installation status: companion app, its service, Vetro pairing, Shard version.', returns: '{version, app, appVersion, service, handoff, pairing, sound, overlay, screen, serviceDiag:{launch,reports,file}}; handoff = the queue file the banner service reads exists' },
                 { method: 'POST', path: 'service-report', summary: 'Used by the banner service to say what happened (started, where it read the queue, whether the banner function exists, its error). The last 8 are in GET status, serviceDiag.', body: '{stage, ...}', returns: '{ok}' },
                 { method: 'GET', path: 'lang', summary: 'Display language (en or pt).', returns: '{lang}' },
                 { method: 'POST', path: 'lang', summary: 'Set the display language.', body: '{lang: "en"|"pt"}', returns: '{lang}' },
-                { method: 'GET', path: 'profiles', summary: 'The sources (profiles): defaults per sender. Keys are never returned, only hasKey.', returns: '{profiles:{<source>:{enabled,icon,level,mode,duration,rate,hasKey}}, max}' },
-                { method: 'POST', path: 'profiles', summary: 'Create, change or delete a source.', body: '{source, icon?, level?, mode?, duration?, rate? (per minute, 0 = no limit), enabled?, key? ("" clears), genKey? (true returns a new key once), delete?}', returns: '{ok, source, profile, key?}' },
+                { method: 'GET', path: 'profiles', summary: 'The sources (profiles): defaults per sender. Keys are never returned, only hasKey.', returns: '{profiles:{<source>:{enabled,icon,level,mode,duration,rate,sound,volume,theme,priority,allowSound,allowMode,allowUrgent,categories,hasKey}}, seen:{<source>:{categories,at,opened}}, max}' },
+                { method: 'POST', path: 'profiles', summary: 'Create, change or delete a source.', body: '{source, icon?, level?, mode?, duration?, sound?, volume?, theme?, priority?, allowSound?, allowMode?, allowUrgent? (false = what is set here wins over the request), categories? ({name:{mode?,sound?,volume?,duration?}}), rate? (per minute, 0 = no limit), enabled?, key? ("" clears), genKey? (true returns a new key once), delete?} or {source, opened:true} (the panel opened that sender: not new any more, nothing else changes)', returns: '{ok, source, profile, key?} or {ok, source, opened}' },
                 { method: 'GET', path: 'settings', summary: 'Quiet hours, grouping of repeats and strict mode.', returns: '{settings:{quiet:{enabled,from,to,allow},groupSeconds,strict,soundVolume,oneSound,bannerAsOverlay,soundDelayMs,overlayOpacity}}' },
                 { method: 'POST', path: 'settings', summary: 'Change those settings (send only what changes).', body: '{quiet?:{enabled,from:"22:00",to:"07:00",allow:"alert"|"warn"|"none"}, groupSeconds? (0 = off), strict? (true rejects unknown sources), soundVolume? (10-100 %, the volume of every sound, default 100), oneSound? (a sound name: every notification that has a sound plays this one instead; "" = off, the default), bannerAsOverlay? (true: a banner notification, or one without mode, is shown as the overlay bar; both is not changed; default false), soundDelayMs? (0-10000, how long after the request the sound starts, default 3000), overlayOpacity? (20-100 %, how opaque the background of the overlay bar is, default 88)}', returns: '{ok, settings}' },
-                { method: 'GET', path: 'hooks', summary: 'The webhooks (templates that turn any JSON into a notification).', returns: '{hooks, max, base}' },
-                { method: 'POST', path: 'hooks', summary: 'Create, change or delete a webhook.', body: '{name, message (template), title?, level?, icon?, mode?, duration?, source?, delete?}; templates use {{a.b.0.c}} from the posted JSON', returns: '{ok, name, hook, url}' },
+                { method: 'GET', path: 'hooks', summary: 'The webhooks (templates that turn any JSON into a notification).', returns: '{hooks:{<name>:{title,message,level,icon,mode,duration,source,sound,volume}}, max, base}' },
+                { method: 'POST', path: 'hooks', summary: 'Create, change or delete a webhook.', body: '{name, message (template), title?, level?, icon?, mode?, duration?, sound? (a sound name), volume? (10-100), source?, delete?}; templates use {{a.b.0.c}} from the posted JSON', returns: '{ok, name, hook, url}' },
                 { method: 'POST', path: 'hook/<name>', summary: 'Send any JSON (up to 64 KB) to a webhook; its templates build the notification. Non-JSON bodies are available as {{text}}.', returns: 'same as notify' },
                 { method: 'POST', path: 'play', summary: 'Play one of the sounds without a notification, or a 10-second tune made of them (song). The sound volume setting applies. Answers 429 if another sound was played less than 0.8 s ago.', body: '{sound, volume?} or {song:"rock"|"fate"|"stop"}', returns: '{ok, sound:"requested"} or {ok, song:"playing"}' },
                 { method: 'POST', path: 'sound-upload?name=<name>', summary: 'Upload one of your own sounds: the raw bytes of a WAV (PCM 16 bit, mono or stereo, 8-48 kHz, at most 10 s and 1 MB) as the body. The name is 1-24 characters of a-z, 0-9 and -, and cannot be a built-in sound; at most 12. Then use the name as `sound`.', returns: '{ok, name, seconds}' },
@@ -728,6 +761,47 @@ module.exports = function (ctx) {
         }), MAX_HOOK_BODY);
     }
 
+    // What happened to a notification, kept with it in the recent list (GET recent, GET notify-status). Saved only when it changes.
+    function setStatus(id, status, reason) {
+        var i;
+        for (i = 0; i < recent.length; i++) {
+            if (recent[i].id !== id) { continue; }
+            if (recent[i].status !== status || recent[i].reason !== (reason || '')) { recent[i].status = status; recent[i].reason = reason || ''; saveRecent(); }
+            return;
+        }
+    }
+    function record(entry) { recent.unshift(entry); if (recent.length > MAX_RECENT) { recent.pop(); } saveRecent(); }
+    // A refused request of a known sender is logged once (a flood of them cannot push everything else out of the list).
+    function refuse(res, code, text, source, b, known) {
+        var last = recent[0];
+        if (known && !(last && last.status === 'rejected' && last.source === source && last.reason === text)) {
+            seq += 1;
+            record({ id: seq + '-' + Date.now().toString(36), title: clean(b.title, MAX_TITLE), message: clean(b.message, MAX_MESSAGE), level: 'info', source: source, category: rules.cleanCategory(b.category), status: 'rejected', reason: text, at: Date.now() });
+        }
+        if (code === 429 && res.setHeader) { res.setHeader('Retry-After', '60'); }
+        sendJson(res, code, code === 429 ? { error: text, reason: text, retryAfter: 60 } : { error: text, reason: text });
+        return null;
+    }
+    // Senders announce themselves by sending: the panel lists them with their categories. The configuration is only written for something new.
+    var seenAt = {};
+    function noteSeen(source, category) {
+        if (!source) { return; }
+        seenAt[source] = Date.now();
+        var seen = cfgGet().seen || {}, s = has(seen, source) ? seen[source] : null;
+        if (s && (!category || s.indexOf(category) >= 0 || s.length >= 12)) { return; }
+        if (!s && Object.keys(seen).length >= rules.MAX_SOURCES) { return; }
+        saveCfg(function (c) { c.seen = c.seen || {}; c.seen[source] = (has(c.seen, source) ? c.seen[source] : []).concat(category ? [category] : []); });
+    }
+    function seenSources() {
+        var seen = cfgGet().seen || {}, opened = cfgGet().opened || {}, list = {};
+        Object.keys(seen).forEach(function (k) {
+            var at = seenAt[k] || 0, i;
+            for (i = 0; i < recent.length && !at; i++) { if (recent[i].source === k) { at = recent[i].at; } }
+            list[k] = { categories: seen[k], at: at, opened: opened[k] === true };
+        });
+        return list;
+    }
+
     // The one way into the queue: applies the source's profile (key, enabled, rate, defaults), then validates, then quiet hours and grouping.
     // The checks every sender goes through before anything is queued or sent: strict mode, the source's on/off switch, key and rate limit, then its defaults.
     // Answers the error itself and returns null, or returns {b, source, settings}.
@@ -735,11 +809,11 @@ module.exports = function (ctx) {
         var settings = settingsNow(), profiles = cfgGet().profiles || {};
         var source = forcedSource || rules.cleanSource(b.source || headers['x-nc-source']);
         var profile = source && has(profiles, source) ? profiles[source] : null;
-        if (settings.strict && !profile) { sendJson(res, 403, { error: source ? 'unknown source' : 'source is required' }); return null; }
+        if (settings.strict && !profile) { return refuse(res, 403, source ? 'unknown source' : 'source is required', source, b, false); }
         if (profile) {
-            if (profile.enabled === false) { sendJson(res, 403, { error: 'source is disabled' }); return null; }
-            if (profile.key && !rules.sameKey(headers['x-nc-key'] || b.key, profile.key)) { sendJson(res, 403, { error: 'invalid key for this source' }); return null; }
-            if (!limiter(source, profile.rate, Date.now())) { sendJson(res, 429, { error: 'rate limit for this source' }); return null; }
+            if (profile.enabled === false) { return refuse(res, 403, 'source is disabled', source, b, true); }
+            if (profile.key && !rules.sameKey(headers['x-nc-key'] || b.key, profile.key)) { return refuse(res, 403, 'invalid key for this source', source, b, false); }
+            if (!limiter(source, profile.rate, Date.now())) { return refuse(res, 429, 'rate limit for this source', source, b, true); }
         }
         return { b: rules.applyProfile(b, profile), source: source, settings: settings };
     }
@@ -870,7 +944,7 @@ module.exports = function (ctx) {
         while (queue.length > MAX_QUEUE) {
             var i, drop = -1;
             for (i = 0; i < queue.length; i++) { if (queue[i].priority !== 'high') { drop = i; break; } }
-            queue.splice(drop < 0 ? queue.length - 1 : drop, 1);
+            setStatus(queue.splice(drop < 0 ? queue.length - 1 : drop, 1)[0].id, 'dropped', 'queue full');
         }
     }
     // The button on the full-screen card: the id of an app installed on the TV (a plain id) and a short label. Nothing else is kept.
@@ -919,6 +993,11 @@ module.exports = function (ctx) {
             if (!(dur >= MIN_DURATION)) { dur = DEFAULT_DURATION; }
             if (dur > MAX_DURATION) { dur = MAX_DURATION; }
             if (secs < dur + 20) { secs = dur + 20; }
+            // ttl: after this many seconds the notification is old news and is not shown any more.
+            var ttl = num(b.ttl);
+            if (ttl >= 1) { secs = ttl > 3600 ? 3600 : ttl; }
+            var category = rules.cleanCategory(b.category);
+            noteSeen(source, category);
             prune();
             seq += 1;
             // The setting bannerAsOverlay turns a banner (asked for, or the default) into the overlay bar, only when the bar can be drawn. "both" keeps its card.
@@ -938,46 +1017,58 @@ module.exports = function (ctx) {
                 mode: mode,
                 duration: dur,
                 source: source,
+                category: category,
+                replace: clean(b.replace, 40),
                 sound: !rules.hasSound(b.sound) ? '' : (rules.hasSound(settings.oneSound) ? settings.oneSound : b.sound),
                 volume: soundVolume(b.volume),
                 expires: Date.now() + secs * 1000
             };
-            var entry = { id: note.id, title: note.title, message: note.message, level: note.level, mode: note.mode, duration: note.duration, icon: note.icon, image: note.image, wallpaper: note.wallpaper, theme: note.theme, priority: note.priority, action: note.action ? note.action.label : '', source: source, sound: note.sound, volume: note.volume, at: Date.now() };
+            var entry = { id: note.id, title: note.title, message: note.message, level: note.level, mode: note.mode, duration: note.duration, icon: note.icon, image: note.image, wallpaper: note.wallpaper, theme: note.theme, priority: note.priority, action: note.action ? note.action.label : '', source: source, category: category, status: 'queued', reason: '', sound: note.sound, volume: note.volume, at: Date.now() };
+            var effective = { mode: note.mode, sound: note.sound, volume: note.volume || 100, duration: note.duration };
             // Quiet hours: below the allowed level the notification is only recorded, never shown.
             if (note.priority !== 'high' && rules.isQuiet(settings, note.level, new Date())) {
-                entry.suppressed = true;
-                recent.unshift(entry); if (recent.length > MAX_RECENT) { recent.pop(); } saveRecent();
-                return sendJson(res, 200, { ok: true, id: note.id, suppressed: 'quiet hours' });
+                entry.suppressed = true; entry.status = 'suppressed'; entry.reason = 'quiet hours';
+                record(entry);
+                return sendJson(res, 200, { ok: true, id: note.id, status: 'suppressed', reason: 'quiet hours', suppressed: 'quiet hours', effective: effective });
+            }
+            // Full: say so instead of accepting a notification that would never be shown.
+            var isOverlay = note.mode === 'overlay';
+            if (isOverlay ? barFull(note) : (note.priority !== 'high' && queue.length >= MAX_QUEUE && queue.every(function (n) { return n.priority === 'high'; }))) {
+                entry.status = 'rejected'; entry.reason = 'queue full';
+                record(entry);
+                if (res.setHeader) { res.setHeader('Retry-After', '10'); }
+                return sendJson(res, 429, { ok: false, id: note.id, error: 'queue full', reason: 'queue full', retryAfter: 10 });
             }
             // Grouping: the same source, title, message and level within the window is counted, not shown again. It is skipped when it is off
             // (groupSeconds 0) and for a request that says group:false (the panel's Resend and test buttons). The map only holds entries younger than the window.
-            if (settings.groupSeconds && b.group !== false && note.priority !== 'high') {
+            if (settings.groupSeconds && b.group !== false && !note.replace && note.priority !== 'high') {
                 var sig = [source, note.title, note.message, note.level].join(String.fromCharCode(1)), nowMs = Date.now(), g = has(groups, sig) ? groups[sig] : null, r;
                 if (g && nowMs - g.at < settings.groupSeconds * 1000) {
                     g.count += 1;
                     for (r = 0; r < recent.length; r++) { if (recent[r].id === g.id) { recent[r].count = g.count; } }
                     saveRecent();
-                    return sendJson(res, 200, { ok: true, id: g.id, merged: true, count: g.count });
+                    return sendJson(res, 200, { ok: true, id: g.id, status: 'merged', reason: 'repeat', merged: true, count: g.count, effective: effective });
                 }
                 groups[sig] = { at: nowMs, id: note.id, count: 1 };
                 pruneGroups(nowMs, settings.groupSeconds * 1000);
             }
             // The overlay bar is drawn by the Shard's own helper, so it never goes through the queue the app and the banner service read.
-            var isOverlay = note.mode === 'overlay';
+            record(entry);
             if (!isOverlay) {
+                if (note.replace) { queue = queue.filter(function (n) { if (sameSlot(n, note)) { setStatus(n.id, 'replaced'); return false; } return true; }); }
                 enqueue(note);
                 writeQueueFile();
             }
-            recent.unshift(entry);
-            if (recent.length > MAX_RECENT) { recent.pop(); }
-            saveRecent();
-            var opened = b.open === false ? 'not requested' : (isOverlay ? overlayShow(note) : openApp(note.mode === 'banner'));
+            var opened = b.open === false ? 'not requested' : (isOverlay ? overlayShow(note) : openApp(note.mode === 'banner', note.id));
+            if (isOverlay && (opened === 'error' || opened === 'unavailable')) { setStatus(note.id, 'failed', 'the bar is not available'); }
             // The sound is asked for only now: not for a notification held back by quiet hours or merged as a repeat. The overlay bar appears within a second, so its sound plays at once.
             var soundState = 'none';
             if (note.sound) {
                 if (b.open === false || soundWaitMs <= 0 || isOverlay) { soundState = playSound(note.sound, note.volume); } else { soundState = scheduleSound(note) ? 'requested' : 'skipped'; }
             }
-            sendJson(res, 200, { ok: true, id: note.id, open: opened, sound: soundState });
+            // "shown" only where the Shard knows it: the bar that starts now. A launch or a start that fails later changes the status in the log.
+            var status = entry.status === 'failed' ? 'failed' : (isOverlay && opened === 'requested' ? 'shown' : 'queued');
+            sendJson(res, 200, { ok: true, id: note.id, status: status, reason: entry.reason, effective: effective, open: opened, sound: soundState });
         }
     }
 
@@ -987,7 +1078,7 @@ module.exports = function (ctx) {
         if (req.method === 'GET') {
             var out = {}, ps = cfgGet().profiles || {};
             Object.keys(ps).forEach(function (k) { out[k] = rules.publicProfile(ps[k]); });
-            return sendJson(res, 200, { profiles: out, max: rules.MAX_SOURCES });
+            return sendJson(res, 200, { profiles: out, seen: seenSources(), max: rules.MAX_SOURCES });
         }
         readBodyG(req, res, function (raw) {
             var b, source, ps, p, genKey = '';
@@ -995,7 +1086,13 @@ module.exports = function (ctx) {
             source = rules.cleanSource(b && b.source);
             if (!source) { return sendJson(res, 400, { error: 'source must be 1-32 characters: a-z, 0-9, . _ -' }); }
             ps = cfgGet().profiles || {};
-            if (b.delete === true) { saveCfg(function (c) { c.profiles = c.profiles || {}; delete c.profiles[source]; }); return sendJson(res, 200, { ok: true, deleted: source }); }
+            if (b.delete === true) { saveCfg(function (c) { c.profiles = c.profiles || {}; delete c.profiles[source]; if (c.seen) { delete c.seen[source]; } if (c.opened) { delete c.opened[source]; } }); delete seenAt[source]; return sendJson(res, 200, { ok: true, deleted: source }); }
+            // {source, opened:true}: only remembers that the panel opened a sender that announced itself; no profile is made or changed.
+            if (b.opened === true) {
+                var known = has(cfgGet().seen || {}, source);
+                if (known && !has(cfgGet().opened || {}, source)) { saveCfg(function (c) { c.opened = c.opened || {}; c.opened[source] = true; }); }
+                return sendJson(res, 200, { ok: true, source: source, opened: known });
+            }
             if (!has(ps, source) && Object.keys(ps).length >= rules.MAX_SOURCES) { return sendJson(res, 400, { error: 'at most ' + rules.MAX_SOURCES + ' sources' }); }
             if (b.genKey === true) { genKey = require('crypto').randomBytes(16).toString('hex'); b.key = genKey; }
             p = rules.sanitizeProfile(b, cleanIcon, has(ps, source) ? ps[source] : null);
@@ -1040,7 +1137,7 @@ module.exports = function (ctx) {
 
     return {
         start: function () { loadCustom(); loadThemes(); },
-        stop: function () { abortFetches(); cancelSounds(); stopSong(); queue = []; writeQueueFile(); },
+        stop: function () { abortFetches(); cancelSounds(); stopSong(); barStop(); queue = []; writeQueueFile(); },
         status: function () { prune(); return { queued: queue.length, appId: appId() }; },
         route: function (req, res, sub) {
             sub = String(sub || '').split('?')[0].replace(/^\/+|\/+$/g, '');
@@ -1070,13 +1167,14 @@ module.exports = function (ctx) {
             if (sub === 'notifications' && req.method === 'GET') {
                 if (/[?&]src=app(&|$)/.test(String(req.url || ''))) {
                     mark('poll', req);
+                    queue.forEach(function (n) { if (n.mode !== 'banner') { setStatus(n.id, 'shown'); } });
                     appPoll = /[?&]bye=1(&|$)/.test(String(req.url || '')) ? 0 : Date.now();
                     if (appPoll) { queue.forEach(function (n) { if (n.mode !== 'banner' && has(waitingSounds, n.id)) { waitingSounds[n.id].fire(); } }); }
                 }
                 prune();
                 var now = Date.now();
                 var out = { lang: getLang(), notifications: queue.map(function (n) {
-                    return { id: n.id, title: n.title, message: n.message, level: n.level, mode: n.mode, duration: n.duration, icon: n.icon, image: n.image, wallpaper: n.wallpaper, priority: n.priority, action: n.action ? { label: n.action.label } : null, seconds: Math.ceil((n.expires - now) / 1000) };
+                    return { id: n.id, title: n.title, message: n.message, level: n.level, mode: n.mode, duration: n.duration, icon: n.icon, image: n.image, wallpaper: n.wallpaper, priority: n.priority, svc: n.mode === 'banner' && serviceAlive(), action: n.action ? { label: n.action.label } : null, seconds: Math.ceil((n.expires - now) / 1000) };
                 }) };
                 if (wantsScript(req)) { sendScript(res, out); } else { sendJson(res, 200, out); }
                 return true;
@@ -1092,6 +1190,11 @@ module.exports = function (ctx) {
                     ctx.config.set(c);
                     sendJson(res, 200, { lang: b.lang });
                 });
+                return true;
+            }
+            if (sub === 'notify-status' && req.method === 'GET') {
+                var want = /[?&]id=([0-9a-z-]+)/.exec(String(req.url || '')), found = want ? recent.filter(function (r) { return r.id === want[1]; })[0] : null;
+                sendJson(res, found ? 200 : 404, found ? { ok: true, id: found.id, status: found.status || 'queued', reason: found.reason || '', source: found.source || '', category: found.category || '' } : { ok: false, error: 'unknown id (only the last ' + MAX_RECENT + ' are kept)' });
                 return true;
             }
             if (sub === 'recent' && req.method === 'GET') { sendJson(res, 200, { recent: recent }); return true; }

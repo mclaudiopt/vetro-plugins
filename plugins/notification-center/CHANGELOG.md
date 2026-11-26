@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.26.0
+
+- **Panel:** a sender says what changes on the TV while one of its controls is off; the "New" mark goes away once the sender is opened (`seen.<source>.opened`, `POST profiles` `{source, opened: true}`); Try it has an example for each category (goal, civil protection, weather, news, reminder); Resend in the log also sends the sender (`source`), so its rules apply again, and a sender with a key refuses it; a message sent without a volume is resent at full volume, not at the lowest; on a phone the four ways of showing a message sit in two rows.
+- **Fix:** a refused `POST service-report` no longer counts as a living banner service (which stopped the app screen from posting banners for 10 minutes).
+- **Documentation:** `API.md` and `GET api` now give `priority`, `action` and `svc` in `GET notifications`, the fields of `GET recent`, the real time limits of a picture download (8 s per silent connection, 10 s in total), the `sound` and `volume` of webhooks, `handoff` in the status, the `key` field and a security note on what a sender defines.
+
+## 0.25.0
+
+- **The hub for every Shard:** new fields `category`, `ttl` and `replace`; every answer says what happened (`status`, `reason`, `effective`) and `GET notify-status` tells it later; `GET api` lists `features`.
+- **Who decides:** each sender can have defaults per category and can be stopped from choosing the sound, how it appears or sending urgent ones. Senders appear by themselves with their categories.
+- **Smaller package:** the emoji list keeps fewer search words (names in English and Portuguese still work), so that the TV accepts the package (516 KiB at most).
+- **Panel:** Senders and rules shows the list and the chosen sender; the log in System shows sender, category and result, with filters; a chip warns about notifications that did not arrive.
+
+## 0.24.0
+
+- **Fixes:** a full queue now answers `429` with `Retry-After` instead of accepting and losing the notification; the bar shows one at a time instead of covering each other; the app screen no longer posts a banner the service already posts; a bar or app that cannot start is reported; `API.md` and `GET api` completed.
+
 ## 0.23.0
 
 - The "Technical" tab is now called **System**.

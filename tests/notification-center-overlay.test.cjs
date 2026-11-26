@@ -19,7 +19,7 @@ function start(options = {}) {
         id: 'notification-center', dir: fs.mkdtempSync(path.join(os.tmpdir(), 'nc-ovl-shard-')),
         config: {get: () => JSON.parse(JSON.stringify(config)), set: v => { config = JSON.parse(JSON.stringify(v)); }},
         queueFile: path.join(os.tmpdir(), 'nc-q-' + process.pid + '-' + Math.random().toString(36).slice(2) + '.json'),
-        overlay: {dir},
+        overlay: {dir, secondMs: options.secondMs || 0},
         sound: {gapMs: 0, waitMs: 0, songScale: 0.01}
     };
     if (options.vetro) ctx.vetro = options.vetro;

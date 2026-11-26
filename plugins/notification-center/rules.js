@@ -21,7 +21,23 @@ function hasSound(n) { return has(SOUNDS, n) || has(CUSTOM, n); }
 var SOURCE_RE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
 var HOOK_RE = /^[a-z0-9][a-z0-9-]{0,23}$/;
 var KEY_RE = /^[A-Za-z0-9._~-]{8,64}$/;
-var MAX_SOURCES = 20, MAX_HOOKS = 10, MAX_TEMPLATE = 200, MAX_RATE = 600;
+var MAX_SOURCES = 20, MAX_HOOKS = 10, MAX_TEMPLATE = 200, MAX_RATE = 600, MAX_CATEGORIES = 12;
+var CATEGORY_RE = /^[a-z0-9][a-z0-9_-]{0,23}$/;
+function cleanCategory(v) { var s = str(v).trim().toLowerCase(); return CATEGORY_RE.test(s) ? s : ''; }
+// Per-category defaults of a sender: {name: {mode?, sound?, volume?, duration?}}; entries with nothing set are dropped.
+function sanitizeCategories(v) {
+    var out = {}, k, c, e, n = 0;
+    for (k in (isObj(v) ? v : {})) {
+        if (!has(v, k) || cleanCategory(k) !== k || !isObj(v[k]) || n >= MAX_CATEGORIES) { continue; }
+        c = v[k]; e = {};
+        if (has(MODES, c.mode)) { e.mode = c.mode; }
+        if (hasSound(c.sound)) { e.sound = c.sound; }
+        if (storedVolume(c.volume)) { e.volume = storedVolume(c.volume); }
+        if (clampInt(c.duration, 1, 60, 0)) { e.duration = clampInt(c.duration, 1, 60, 0); }
+        if (Object.keys(e).length) { out[k] = e; n += 1; }
+    }
+    return out;
+}
 
 // Text from the outside: only strings, numbers and booleans are accepted; objects, arrays and null become ''.
 function str(v) {
@@ -79,6 +95,10 @@ function sanitizeProfile(p, cleanIcon, old) {
         volume: has(p, 'volume') ? storedVolume(p.volume) : (old.volume || 0),
         theme: hasTheme(p.theme) ? p.theme : (has(p, 'theme') && !p.theme ? '' : (old.theme || '')),
         priority: has(p, 'priority') ? (p.priority === 'high' ? 'high' : '') : (old.priority || ''),
+        allowSound: has(p, 'allowSound') ? p.allowSound !== false : old.allowSound !== false,
+        allowMode: has(p, 'allowMode') ? p.allowMode !== false : old.allowMode !== false,
+        allowUrgent: has(p, 'allowUrgent') ? p.allowUrgent !== false : old.allowUrgent !== false,
+        categories: has(p, 'categories') ? sanitizeCategories(p.categories) : (old.categories || {}),
         key: old.key || ''
     };
     if (has(p, 'key')) {
@@ -90,13 +110,19 @@ function sanitizeProfile(p, cleanIcon, old) {
 }
 // What GET returns: everything except the key itself.
 function publicProfile(p) {
-    return { enabled: p.enabled !== false, icon: p.icon || '', level: p.level || '', mode: p.mode || '', duration: p.duration || 0, rate: p.rate || 0, sound: p.sound || '', volume: p.volume || 0, theme: p.theme || '', priority: p.priority || '', hasKey: !!p.key };
+    return { enabled: p.enabled !== false, icon: p.icon || '', level: p.level || '', mode: p.mode || '', duration: p.duration || 0, rate: p.rate || 0, sound: p.sound || '', volume: p.volume || 0, theme: p.theme || '', priority: p.priority || '', allowSound: p.allowSound !== false, allowMode: p.allowMode !== false, allowUrgent: p.allowUrgent !== false, categories: p.categories || {}, hasKey: !!p.key };
 }
-// Fills in what the sender left out with the source's defaults. The sender's own values always win.
+// Fills in what the sender left out with the defaults of its category and then of the source. The sender's own values win, except where
+// the source does not allow it (allowSound, allowMode, allowUrgent false): then what is set here is used, and nothing means the plain default.
 function applyProfile(body, p) {
     var out = {}, k;
     for (k in body) { if (has(body, k) && k !== '__proto__') { out[k] = body[k]; } }
     if (!p) { return out; }
+    var cat = cleanCategory(out.category), c = has(p.categories, cat) ? p.categories[cat] : {};
+    if (p.allowSound === false) { delete out.sound; delete out.volume; }
+    if (p.allowMode === false) { delete out.mode; }
+    if (p.allowUrgent === false) { delete out.priority; }
+    ['mode', 'sound', 'volume', 'duration'].forEach(function (f) { if ((out[f] == null || out[f] === '') && c[f]) { out[f] = c[f]; } });
     if ((out.icon == null || out.icon === '') && p.icon) { out.icon = p.icon; }
     if (!out.level && p.level) { out.level = p.level; }
     if (!out.mode && p.mode) { out.mode = p.mode; }
@@ -192,6 +218,7 @@ function buildFromHook(hook, data) {
 }
 
 module.exports = {
+    cleanCategory: cleanCategory,
     clampVolume: clampVolume, storedVolume: storedVolume,
     LEVEL_RANK: LEVEL_RANK, LEVELS: LEVELS, MODES: MODES, THEMES: THEMES, CUSTOM_THEMES: CUSTOM_THEMES, hasTheme: hasTheme, PRIORITIES: PRIORITIES, SOUNDS: SOUNDS, CUSTOM: CUSTOM, hasSound: hasSound, MAX_SOURCES: MAX_SOURCES, MAX_HOOKS: MAX_HOOKS, MAX_TEMPLATE: MAX_TEMPLATE, MAX_RATE: MAX_RATE,
     str: str, num: num, has: has, isObj: isObj,

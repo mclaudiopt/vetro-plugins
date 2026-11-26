@@ -219,7 +219,7 @@
       fresh.forEach(function (n) {
         seen[n.id] = 1;
         if (n.mode !== 'banner') { showCard(n); }
-        (n.mode === 'full' ? function (t, b, cb) { cb(null); } : post)(((n.icon || EMO[n.level] || '') + ' ' + (n.title || 'Notification')).replace(/^ /, ''), n.message || '', function (e) {
+        (n.mode === 'full' || n.svc ? function (t, b, cb) { cb(null); } : post)(((n.icon || EMO[n.level] || '') + ' ' + (n.title || 'Notification')).replace(/^ /, ''), n.message || '', function (e) {
           log(e ? 'err' : 'ok', (n.title || 'Notification') + ': ' + (e || 'posted'));
           pending -= 1;
           if (pending) { return; }

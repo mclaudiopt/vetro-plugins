@@ -161,7 +161,28 @@ test('a file over 12 MB is refused', () => withShards(async (a, b) => {
     assert.equal(r.code, 413);
 }));
 
-test('the self-description lists both routes and the Cast routes are gone', () => withShards(async (a) => {
+test('GET apps gives only the visible apps of the TV, and an empty list when Vetro does not answer', async () => {
+    const http = require('http');
+    const vetro = http.createServer((q, r) => r.end(JSON.stringify({apps: [
+        {appId: 'a.visible', name: 'Visible', show: true}, {appId: 'b.hidden', name: 'Hidden', show: false}, {appId: 'bad id', show: true}, null]})));
+    await new Promise(ok => vetro.listen(0, '127.0.0.1', ok));
+    const port = vetro.address().port;
+    const shard = create({id: 'notification-center', dir: fs.mkdtempSync(path.join(os.tmpdir(), 'nc-apps-')), config: {get: () => ({}), set: () => {}},
+        queueFile: path.join(os.tmpdir(), 'nc-q-apps-' + process.pid + '.json'), vetro: {port}});
+    try {
+        assert.deepEqual((await call(shard, 'GET', 'apps')).json, {apps: [{appId: 'a.visible', name: 'Visible'}]});
+        await new Promise(ok => vetro.close(ok));
+        assert.deepEqual((await call(shard, 'GET', 'apps')).json, {apps: []});
+    } finally { if (shard.stop) shard.stop(); vetro.close(() => {}); }
+});
+
+test('the panel calls only relative addresses and does not rely on downloads', () => {
+    const ui = fs.readFileSync(path.join(folder, 'ui.html'), 'utf8');
+    assert.doesNotMatch(ui, /fetch\(\s*["']\//);
+    assert.doesNotMatch(ui, /createObjectURL|\.download\s*=/);
+});
+
+test('the self-description lists both routes and the Cast routes are gone',() => withShards(async (a) => {
     const d = (await call(a, 'GET', 'api')).json, paths = d.endpoints.map(e => e.path);
     assert.ok(paths.some(p => /^export/.test(p)));
     assert.ok(paths.includes('import'));

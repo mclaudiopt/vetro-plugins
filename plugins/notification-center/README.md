@@ -17,13 +17,28 @@ returns the same description as JSON. Apps that already publish to [ntfy](https:
 rate limit and key (`X-NC-Key`); quiet hours hold back everything below a chosen level; identical repeats are counted instead of shown again; and **webhooks**
 (`POST hook/<name>`) turn any JSON, such as a GitHub or Home Assistant payload, into a notification with `{{path}}` templates.
 
-**Copy the setup to another TV:** in Settings, "Download the setup file" saves the settings, senders, webhooks and (if you tick it) your own sounds in one JSON file; "Load a setup file" on another TV that has the Notification Center puts them there (`GET export` and `POST import` in the API). The sender keys are left out unless you tick it.
+**Copy the setup to another TV:** in Settings, "Show the setup" gives the settings, senders, webhooks and (if you tick it) your own sounds as one JSON text to copy; "Load a setup file" on another TV that has the Notification Center takes that text, or a file with it, and puts them there (`GET export` and `POST import` in the API). The sender keys are left out unless you tick it.
 
 **Sounds** (optional): a request can ask for one of the TV's system sounds with `sound` (and `volume`); the default is silence. This Shard plays it with one fixed `paplay` command (see Permissions), at most one sound every 0.8 s, with a volume you set next to the selector (the system sounds are quiet, so 100 % is already boosted), and in time with the banner (the sound starts a delay after the request that you tune by ear, because the Shard cannot see when the banner appears). The **Try it** tab has one-click examples, a check that everything works, the sound tests and a goodie (10 seconds of a well-known tune played only with the notification sounds); the timing and your own sounds are in **Settings**.
 
-The panel (tabs **Send**, **Try it**, **Settings**, **Senders and rules** and **Technical**) is bilingual (English by default, Portuguese optional) and has a form, a request generator, an API explorer, an icon
+The panel (tabs **Send**, **Try it**, **Senders and rules**, **Settings** and **System**) is bilingual (English by default, Portuguese optional) and has a form, a request generator, an API explorer, an icon
 picker (emoji list bundled in `emoji.json`: Unicode CLDR data from [emojibase-data](https://github.com/milesj/emojibase), MIT, no network) and an
 installation status card.
+
+## Interface rules
+
+The panel looks and behaves like the Vetro dashboard, and new controls must too. Source:
+[Vetro's design system](https://github.com/andrearicci93/vetro/tree/main/app/design-system) (`DESIGN.md`, `tokens.css`) and, for the controls
+themselves, the styles in `app/service/dashboard.js`.
+
+- **No checkboxes:** an on/off option is Vetro's switch, a real `<input type="checkbox" role="switch">` styled as a pill, the name on the left and
+  **On / Off** on the right.
+- Dark only, solid surfaces, Vetro's colours; cards with a 16 px radius; controls at least 44 px high with an 8 px radius; a 2 px focus ring.
+- One main button per view, the others quiet, delete buttons in the danger colour; underlined tabs; segmented views and filter chips that expose
+  their pressed state; status chips with a dot.
+- Vetro defines no slider: the native one, with the accent colour.
+- The preview sits on the left of the settings it shows. One card per group with a purpose icon; labels tied to their fields; success in a toast, errors
+  in place; an inline confirmation before anything is deleted; an empty list is one sentence; long explanations behind a disclosure.
 
 ## Permissions
 

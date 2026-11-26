@@ -94,3 +94,19 @@ test('at most 8 sounds wait for their banner at once; the rest are skipped, and 
         assert.deepEqual(states, ['requested', 'requested', 'requested', 'requested', 'requested', 'requested', 'requested', 'requested', 'skipped', 'skipped', 'skipped', 'skipped']);
     } finally { s.shard.stop(); }
 });
+
+test('oneSound replaces the sound of every notification and leaves silent ones silent', () => withShard(async (s, commands) => {
+    await call(s, 'POST', 'settings', {oneSound: 'soft'});
+    await call(s, 'POST', 'notify', {message: 'a', sound: 'reward', group: false});
+    await wait(5);
+    assert.ok(commands[commands.length - 1].includes('select.wav'));
+    const before = commands.length;
+    const quiet = await call(s, 'POST', 'notify', {message: 'b', group: false});
+    await wait(5);
+    assert.equal(quiet.json.sound, 'none');
+    assert.equal(commands.slice(before).filter(c => c.includes('paplay')).length, 0);
+    await call(s, 'POST', 'settings', {groupSeconds: 0});
+    assert.equal((await call(s, 'GET', 'settings')).json.settings.oneSound, 'soft');
+    await call(s, 'POST', 'settings', {oneSound: ''});
+    assert.equal((await call(s, 'GET', 'settings')).json.settings.oneSound, '');
+}));

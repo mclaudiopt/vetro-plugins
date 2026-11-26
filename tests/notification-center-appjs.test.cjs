@@ -71,7 +71,7 @@ test('the first address that works stops the search', async () => {
 
 test('the manifest asks for the privilege and the version of the new app', () => {
     const cfg = fs.readFileSync(path.join(folder, 'config.xml'), 'utf8');
-    assert.match(cfg, /version="0\.2\.3"/);
+    assert.match(cfg, /version="0\.2\.5"/);
     assert.match(cfg, /privilege\/systeminfo/);
     assert.match(cfg, /<access origin="\*"/);
 });

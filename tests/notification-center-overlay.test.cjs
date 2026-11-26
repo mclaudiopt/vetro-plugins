@@ -196,3 +196,50 @@ test('the helper source is shipped next to the compiled helper', () => {
     assert.ok(fs.statSync(path.join(folder, 'overlay', 'ncoverlay.dll.b64')).size > 1000);
     assert.ok(!/Process\.Start|System\.Net|Socket/.test(src), 'the helper starts no processes and opens no sockets');
 });
+
+test('bannerAsOverlay is off by default and a banner stays a banner', () => withShard(async s => {
+    assert.equal((await call(s, 'GET', 'settings')).json.settings.bannerAsOverlay, false);
+    await call(s, 'POST', 'notify', {message: 'plain', mode: 'banner', open: false});
+    assert.equal((await call(s, 'GET', 'recent')).json.recent[0].mode, 'banner');
+}));
+
+test('bannerAsOverlay draws the bar for banner and for no mode, and leaves both and full alone', () => withShard(async (s, commands, dir) => {
+    await call(s, 'POST', 'settings', {bannerAsOverlay: true});
+    await call(s, 'POST', 'settings', {overlayOpacity: 70});
+    assert.equal((await call(s, 'GET', 'settings')).json.settings.bannerAsOverlay, true);
+    for (const extra of [{mode: 'banner'}, {}, {mode: 'nonsense'}]) {
+        const r = await call(s, 'POST', 'notify', Object.assign({message: 'to the bar', group: false}, extra));
+        assert.equal(r.json.open, 'requested');
+        assert.equal((await call(s, 'GET', 'recent')).json.recent[0].mode, 'overlay');
+    }
+    await wait(30);
+    assert.equal(commands.length, 3);
+    commands.forEach(c => assert.match(c, COMMAND));
+    assert.equal(jobLines(dir)[1], 'to the bar');
+    assert.equal((await call(s, 'GET', 'notifications')).json.notifications.length, 0);
+    for (const mode of ['both', 'full']) {
+        await call(s, 'POST', 'notify', {message: mode, mode, open: false});
+        assert.equal((await call(s, 'GET', 'recent')).json.recent[0].mode, mode);
+    }
+    await call(s, 'POST', 'settings', {bannerAsOverlay: false});
+    await call(s, 'POST', 'notify', {message: 'back', open: false});
+    assert.equal((await call(s, 'GET', 'recent')).json.recent[0].mode, 'banner');
+}));
+
+test('bannerAsOverlay keeps the banner when the bar cannot be drawn', () => withShard(async s => {
+    await call(s, 'POST', 'settings', {bannerAsOverlay: true});
+    await call(s, 'POST', 'notify', {message: 'no exec', open: false});
+    assert.equal((await call(s, 'GET', 'recent')).json.recent[0].mode, 'banner');
+}, {execute: null}));
+
+test('service reports are cleaned, capped and shown in GET status', () => withShard(async s => {
+    assert.equal((await call(s, 'POST', 'service-report', {nothing: 1})).code, 400);
+    assert.equal((await call(s, 'POST', 'service-report', 'not json')).code, 400);
+    for (let i = 0; i < 10; i++) await call(s, 'POST', 'service-report', {stage: 'queue', count: i, extra: 'dropped', error: 'x'.repeat(500)});
+    const d = (await call(s, 'GET', 'status')).json.serviceDiag;
+    assert.equal(d.reports.length, 8);
+    assert.equal(d.reports[7].count, 9);
+    assert.equal(d.reports[7].extra, undefined);
+    assert.ok(d.reports[7].error.length <= 200);
+    assert.equal(d.file, null);
+}));

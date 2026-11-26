@@ -3,167 +3,249 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark light">
+<meta name="color-scheme" content="dark">
 <title>Notification Center</title>
 <style>
-:root { --bg: #0a0d12; --s1: #10151e; --s2: #151b27; --s3: #1c2434; --line: #222b3d; --line2: #2f3a52; --txt: #e8edf6; --dim: #8794ab; --acc: #3d8bff; --ok: #34c78f; --warn: #f1a73a; --alert: #ee5a74; --info: #3d8bff; --r: 14px; }
+/* The look of the Vetro dashboard: tokens from app/design-system/tokens.css, controls from app/service/dashboard.js
+   (andrearicci93/vetro). Dark only, as the dashboard. */
+:root { color-scheme: dark;
+  --bg: #080f23; --surface: #101c35; --raised: #192943; --text: #f5f8ff; --muted: #aab8d1; --border: #344360; --control: #7183a2;
+  --action: #123bb5; --action-hover: #0e3095; --accent: #8fbaff; --accent-soft: rgba(143, 186, 255, .14); --accent-line: rgba(143, 186, 255, .4);
+  --ok: #7fcba0; --ok-soft: rgba(127, 203, 160, .12); --ok-line: rgba(127, 203, 160, .4);
+  --warn: #e2b867; --warn-soft: rgba(226, 184, 103, .12); --warn-line: rgba(226, 184, 103, .4);
+  --danger: #ef8a80; --danger-soft: rgba(239, 138, 128, .12); --danger-line: rgba(239, 138, 128, .4);
+  --r: 8px; --r-surface: 16px; --pill: 999px; --fast: 120ms; --ease: cubic-bezier(.2, 0, 0, 1);
+  --mono: ui-monospace, SFMono-Regular, Consolas, monospace; }
 * { box-sizing: border-box; scrollbar-width: none; -ms-overflow-style: none; }
 *::-webkit-scrollbar { width: 0; height: 0; display: none; }
-html { color-scheme: dark; }
-body { margin: 0; background: var(--bg); color: var(--txt); font: 14px/1.5 "Segoe UI", "SamsungOne", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-.app { max-width: 1240px; margin: 0 auto; padding: 20px 24px 44px; }
-h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
-h2 { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--dim); font-weight: 600; margin: 0 0 12px; }
-h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 1rem/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+.app { max-width: 1240px; margin: 0 auto; padding: 24px 24px 48px; }
+h1, h2, h3 { font-weight: 500; overflow-wrap: anywhere; }
+h1 { font-size: 1.5rem; line-height: 1.2; margin: 0; }
+h2 { font-size: 1.125rem; margin: 0 0 12px; }
+h3 { font-size: 1rem; margin: 0 0 8px; }
 p { margin: 0; }
 ul { list-style: none; margin: 0; padding: 0; }
-code, pre { font-family: "Cascadia Mono", Consolas, monospace; }
-code { background: var(--s2); border-radius: 5px; padding: 1px 5px; font-size: 12px; }
-pre { background: #090c11; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-all; margin: 0; color: #b9c6df; }
+a { color: var(--accent); }
+code, pre { font-family: var(--mono); font-size: .875rem; }
+code { background: var(--raised); border-radius: var(--r); padding: 1px 6px; overflow-wrap: anywhere; }
+pre { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 12px 16px; white-space: pre-wrap; word-break: break-all; margin: 0; }
+[hidden] { display: none !important; }
 
-/* header */
-.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-.brand { display: flex; align-items: center; gap: 14px; }
-.logo { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(145deg, #3d8bff, #6b5bff); display: grid; place-items: center; box-shadow: 0 6px 18px rgba(61, 139, 255, .32); }
-.sub { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px; min-height: 22px; }
-.chip { font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 999px; background: var(--s2); border: 1px solid var(--line); color: var(--dim); }
-.chip::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; background: var(--dim); }
-.chip.g::before { background: var(--ok); } .chip.r::before { background: var(--alert); } .chip.y::before { background: var(--warn); }
-.lang { display: flex; background: var(--s1); border: 1px solid var(--line); border-radius: 999px; padding: 2px; }
-.lang button { border: 0; background: none; color: var(--dim); padding: 5px 14px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 12px; }
-.lang button.on { background: var(--acc); color: #fff; }
-
-/* layout: three columns (message and look, pictures and send, preview with recent); everything flows down the page, no inner scrollbars */
-.layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; align-items: start; }
-details.more { border-bottom: 1px solid var(--line); }
-details.more > summary { cursor: pointer; padding: 14px 20px; font-weight: 600; color: var(--dim); list-style: none; }
-details.more > summary::-webkit-details-marker { display: none; }
-details.more > summary::before { content: '+ '; color: var(--acc); }
-details.more[open] > summary::before { content: '- '; }
-details.more[open] > summary { color: var(--txt); }
-details.more > .inner { padding: 0 20px 18px; }
-.hint { color: var(--dim); font-size: 12px; margin: 4px 0 10px; }
-.exgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 8px 0 6px; }
-.exbtn { text-align: left; background: var(--s2); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; cursor: pointer; color: var(--txt); }
-.exbtn:hover { border-color: var(--acc); }
-.exbtn b { display: block; font-size: 14px; }
-.exbtn small { display: block; color: var(--dim); font-size: 12px; margin-top: 3px; }
-.col, .dev { background: var(--s1); border: 1px solid var(--line); border-radius: var(--r); }
-.sec { padding: 18px 20px; border-bottom: 1px solid var(--line); }
-.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.stack input { margin-bottom: 8px; }
-.stack input:last-child { margin-bottom: 0; }
-input, select, button { font: inherit; color: inherit; }
-input[type=text], select { width: 100%; background: var(--s2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; margin-bottom: 8px; transition: border-color .15s, box-shadow .15s; }
-input[type=text]::placeholder { color: #5f6b82; }
-input[type=text]:focus, select:focus { outline: 0; border-color: var(--acc); box-shadow: 0 0 0 3px rgba(61, 139, 255, .18); }
-.row > input[type=text] { margin-bottom: 0; }
-
-/* level and mode pickers (built by the script) */
-.levels { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
-.lv { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--s2); color: var(--dim); cursor: pointer; font-size: 13px; transition: border-color .15s, color .15s; }
-.lv:hover { border-color: var(--line2); }
-.lv i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; flex: none; margin: 0; }
-.lv i svg { width: 14px; height: 14px; }
-.lv.on { color: var(--txt); border-color: var(--c); box-shadow: inset 0 0 0 1px var(--c); background: var(--s3); }
-.modes { display: flex; background: var(--s2); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 2px; }
-.md { flex: 1; border: 0; background: none; color: var(--dim); padding: 7px 8px; border-radius: 9px; cursor: pointer; font-size: 13px; font-weight: 500; transition: background .15s, color .15s; }
-.md.on { background: var(--s3); color: var(--txt); box-shadow: 0 1px 0 rgba(255, 255, 255, .05) inset, 0 1px 6px rgba(0, 0, 0, .3); }
-
-/* buttons */
-button { transition: transform .08s, background .2s, opacity .2s, border-color .2s; }
-button:active { transform: scale(.95); }
-.ghost { background: none; border: 1px solid var(--line2); color: var(--dim); border-radius: 999px; padding: 5px 13px; font-size: 12px; font-weight: 600; cursor: pointer; margin: 0; }
-.ghost:hover { color: var(--txt); border-color: var(--acc); }
-.send { background: var(--acc); color: #fff; border: 0; border-radius: 12px; padding: 12px 28px; font-weight: 600; cursor: pointer; box-shadow: 0 6px 18px rgba(61, 139, 255, .3); }
-.send:hover { background: #5499ff; }
+/* controls */
+button, input, select, textarea { font: inherit; color: var(--text); border: 1px solid var(--control); border-radius: var(--r); background: var(--raised); }
+button, select, input[type=text] { min-height: 44px; padding: 8px 16px; }
+button { cursor: pointer; max-width: 100%; overflow-wrap: anywhere; }
+button:hover:not(:disabled) { background: var(--border); }
+button:disabled { opacity: .45; cursor: default; }
+input[type=text], select { width: 100%; min-width: 0; margin-bottom: 8px; }
+input::placeholder, textarea::placeholder { color: var(--muted); }
+textarea { width: 100%; padding: 12px; margin-top: 8px; font: 1rem/1.5 var(--mono); resize: vertical; }
+input[type=range] { min-height: 44px; border: 0; background: none; accent-color: var(--accent); }
+input[type=file] { max-width: 100%; padding: 8px; color: var(--muted); font-size: .875rem; }
+input[type=file]::file-selector-button { min-height: 44px; margin-right: 12px; padding: 0 12px; border: 1px solid var(--control); border-radius: var(--r); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.send { background: var(--action); border-color: var(--action); font-weight: 500; }
+.send:hover:not(:disabled) { background: var(--action-hover); border-color: var(--action-hover); }
+.ghost { font-size: .875rem; }
+.ghost.on { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
+.danger { color: var(--danger); border-color: var(--danger-line); background: var(--danger-soft); }
+.danger:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger); }
 button.busy { opacity: .65; pointer-events: none; }
 button.busy::after { content: ""; display: inline-block; width: 10px; height: 10px; margin-left: 8px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -1px; }
-button.done { background: var(--ok) !important; border-color: var(--ok) !important; color: #06251a !important; }
-button.fail { background: var(--alert) !important; border-color: var(--alert) !important; color: #fff !important; }
+button.done { color: var(--ok) !important; border-color: var(--ok-line) !important; background: var(--ok-soft) !important; }
+button.fail { color: var(--danger) !important; border-color: var(--danger) !important; background: var(--danger-soft) !important; }
 @keyframes sp { to { transform: rotate(360deg); } }
-button:focus-visible, .tab:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+/* switch: the name on the left, the switch and On / Off on the right */
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 8px 0; }
+.setting > label:first-child { flex: 1; min-width: 0; cursor: pointer; }
+.switch { display: flex; min-height: 44px; align-items: center; gap: 12px; cursor: pointer; flex: none; }
+.switch input { appearance: none; -webkit-appearance: none; width: 40px; height: 24px; margin: 0; padding: 0; border: 1px solid var(--control); border-radius: var(--pill); background: var(--raised); position: relative; flex-shrink: 0; cursor: pointer; transition: background var(--fast) var(--ease); }
+.switch input::before { content: ""; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--muted); transition: transform var(--fast) var(--ease), background var(--fast) var(--ease); }
+.switch input:checked { background: var(--action); border-color: var(--accent); }
+.switch input:checked::before { transform: translateX(16px); background: var(--text); }
+.switch input:disabled { opacity: .45; cursor: default; }
+.switch span { font-size: .875rem; color: var(--muted); min-width: 24px; }
+.switch span::after { content: "Off"; }
+.switch input:checked + span::after { content: "On"; }
+html[lang=pt] .switch span { min-width: 80px; }
+html[lang=pt] .switch span::after { content: "Desligado"; }
+html[lang=pt] .switch input:checked + span::after { content: "Ligado"; }
+
+/* header */
+.top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.logo { width: 44px; height: 44px; border-radius: 22%; background: linear-gradient(135deg, #00115b 0%, #123bb5 48%, #1674fb 100%); display: grid; place-items: center; flex: none; }
+.sub { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; min-height: 24px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 2px 8px; border: 1px solid var(--border); border-radius: var(--pill); font-size: .875rem; line-height: 1.35; color: var(--muted); }
+.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.chip.g { color: var(--ok); border-color: var(--ok-line); background: var(--ok-soft); }
+.chip.y { color: var(--warn); border-color: var(--warn-line); background: var(--warn-soft); }
+.chip.r { color: var(--danger); border-color: var(--danger-line); background: var(--danger-soft); }
+
+/* segmented views (language, how it appears) */
+.lang, .modes { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
+.lang button, .md { border: 0; background: transparent; color: var(--muted); }
+.md { flex: 1; }
+.lang button:hover:not(:disabled), .md:hover:not(:disabled) { background: var(--raised); color: var(--text); }
+.lang button.on, .lang button.on:hover:not(:disabled), .md.on, .md.on:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+
+/* tabs */
+.dtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 24px; overflow: auto hidden; }
+.dtabs button { flex: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); white-space: nowrap; margin-bottom: -1px; }
+.dtabs button:focus-visible { outline-offset: -2px; }
+.dtabs button:hover:not(:disabled) { color: var(--text); background: transparent; }
+.dtabs button.on, .dtabs button.on:hover:not(:disabled) { color: var(--text); font-weight: 500; border-bottom-color: var(--accent); }
+
+/* filter chips (request formats, emoji groups) */
+.tabs, .ecats { display: flex; gap: 8px; flex-wrap: wrap; }
+.tabs { margin-bottom: 12px; }
+.ecats { margin-top: 8px; }
+.tab, .ecats button { border-radius: var(--pill); padding: 0 12px; font-size: .875rem; }
+.tab.on, .tab.on:hover:not(:disabled), .ecats button.on, .ecats button.on:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-line); }
+
+/* layout and cards */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 24px; align-items: start; }
+.col, .dev { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-surface); }
+.sec { padding: 16px 24px; border-bottom: 1px solid var(--border); }
+.pane { padding: 16px 24px; }
+details.more { border-bottom: 1px solid var(--border); }
+details.more > summary { cursor: pointer; min-height: 44px; padding: 12px 24px; color: var(--muted); }
+details.more > summary:hover, details.more[open] > summary { color: var(--text); }
+details.more > .inner { padding: 0 24px 16px; }
+.hint, .note { color: var(--muted); font-size: .875rem; line-height: 1.6; }
+.hint { margin: 8px 0 0; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row > input[type=text], .row > select { margin-bottom: 0; }
+.stack input:last-child { margin-bottom: 0; }
+.exgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin: 8px 0; }
+.exbtn { text-align: left; padding: 12px 16px; }
+.exbtn b { display: block; font-weight: 500; }
+.exbtn small { display: block; color: var(--muted); font-size: .875rem; }
+
+/* level picker */
+.levels { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px; }
+.lv { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; color: var(--muted); }
+.lv i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; flex: none; margin: 0; }
+.lv i svg { width: 14px; height: 14px; }
+.lv.on, .lv.on:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
 
 /* footer of the composer */
-.foot { display: flex; flex-direction: column; align-items: stretch; gap: 16px; padding: 18px 20px; background: var(--s2); border-top: 1px solid var(--line); border-radius: 0 0 var(--r) var(--r); }
-.dur { display: flex; align-items: center; gap: 12px; min-width: 0; color: var(--dim); font-size: 12px; }
-.dur input { flex: 1; accent-color: var(--acc); margin: 0; }
-.dur b { color: var(--txt); min-width: 36px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
-.chk { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 13px; cursor: pointer; }
-.msg { min-height: 20px; font-size: 13px; color: var(--dim); }
-.col > .msg { padding: 10px 20px 14px; }
-.ok { color: var(--ok); } .err { color: var(--alert); }
+.foot { display: flex; flex-direction: column; align-items: stretch; gap: 16px; padding: 16px 24px; }
+.dur { display: flex; align-items: center; gap: 12px; min-width: 0; color: var(--muted); font-size: .875rem; }
+.dur input { flex: 1; margin: 0; }
+.dur b { color: var(--text); min-width: 40px; text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; }
+.msg { min-height: 20px; font-size: .875rem; color: var(--muted); }
+.col > .msg { padding: 0 24px 16px; }
+.ok { color: var(--ok); } .err { color: var(--danger); }
 
 /* stage */
 .stage { display: flex; flex-direction: column; gap: 12px; }
-.tv { background: #04060a; border: 1px solid var(--line2); border-radius: 16px; padding: 9px; box-shadow: 0 14px 38px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .03) inset; }
-.scene { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 7px; background: #0a1120; }
-.note { color: var(--dim); font-size: 12px; }
+.tv { background: #04060a; border: 1px solid var(--border); border-radius: var(--r-surface); padding: 8px; }
+.scene { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: var(--r); background: #0a1120; }
 .rhead { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 .rhead h2 { margin: 0; }
-#recent li { display: flex; gap: 10px; align-items: center; padding: 9px 2px; border-bottom: 1px solid var(--line); }
+#recent li { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
 #recent li:last-child { border: 0; }
 #recent li div { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#recent li small { display: block; color: var(--dim); font-size: 11px; }
+#recent li b { font-weight: 500; }
+#recent li small { display: block; color: var(--muted); font-size: .875rem; }
 .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--c); }
-.empty { color: var(--dim); text-align: center; padding: 16px 0; }
+.empty { color: var(--muted); text-align: center; padding: 24px; }
 @keyframes ncSlide { 0% { opacity: 0; transform: translateX(90px); } 14%, 84% { opacity: 1; transform: translateX(0); } 100% { opacity: 0; transform: translateX(90px); } }
 @keyframes ncFade { 0%, 4% { opacity: 0; } 14%, 84% { opacity: 1; } 96%, 100% { opacity: 0; } }
 .sc-banner { animation: ncSlide 6s ease-in-out infinite; }
 .sc-card { animation: ncFade 6s ease-in-out infinite; }
 
-/* icon picker */
-.picker { background: var(--s2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin-top: 10px; }
-.picker[hidden] { display: none; }
-.picker input[type=text] { margin-bottom: 0; background: var(--s1); }
-.ecats { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.ecats button { border: 1px solid var(--line); background: none; color: var(--dim); border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
-.ecats button.on { color: #fff; border-color: var(--acc); }
-.egrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 4px; margin-top: 8px; }
-.egrid button { font-size: 22px; background: none; border: 0; border-radius: 8px; cursor: pointer; padding: 4px; }
-.egrid button:hover { background: var(--s3); }
-
-/* icon popup */
-.modal { position: fixed; inset: 0; background: rgba(4, 6, 10, .74); display: grid; place-items: center; padding: 20px; z-index: 50; }
-.dlg { background: var(--s1); border: 1px solid var(--line2); border-radius: 16px; padding: 18px; width: min(760px, 100%); max-height: 90vh; overflow: auto; box-shadow: 0 24px 60px rgba(0, 0, 0, .6); }
-.dhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+/* icon picker and popup */
+.modal { position: fixed; inset: 0; background: rgba(0, 8, 35, .74); display: grid; place-items: center; padding: 20px; z-index: 50; }
+.dlg { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-surface); padding: 24px; width: min(760px, 100%); max-height: 90vh; overflow: auto; box-shadow: 0 12px 32px rgba(0, 8, 35, .24); }
+.dhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .dhead h2 { margin: 0; }
-.egrid { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); }
-.egrid button { font-size: 26px; padding: 6px; }
+.egrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 4px; margin-top: 8px; }
+.egrid button { font-size: 26px; background: none; border: 0; padding: 4px; }
 
-/* developer area */
-.dev { margin-top: 0; }
-[hidden] { display: none !important; }
-/* Top tabs as rounded buttons (same look as the Alerts Shard): dark, a lighter one with a blue border for the open tab. */
-.dtabs { display: flex; gap: 10px; flex-wrap: wrap; padding: 0; margin-bottom: 18px; }
-.dtabs button { background: var(--s1); border: 1px solid var(--line); color: var(--dim); padding: 9px 20px; border-radius: 14px; font-weight: 700; font-size: 14px; cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
-.dtabs button:hover { border-color: var(--line2); color: var(--txt); }
-.dtabs button.on { color: #fff; background: var(--s3); border-color: var(--acc); }
-.pane { padding: 18px 20px; }
-.pane[hidden] { display: none; }
-.rl { cursor: pointer; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; background: var(--s2); }
-.rl:hover { border-color: var(--acc); }
-.rl small { display: block; color: var(--dim); font-size: 12px; }
+/* rules, status and API */
+.rl { cursor: pointer; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--r); margin-bottom: 8px; }
+.rl:hover { background: var(--raised); }
+.rl b { font-weight: 500; }
+.rl small { display: block; color: var(--muted); font-size: .875rem; }
 .rulesgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .rulesgrid > * { min-width: 0; }
-.lab { font-size: 12px; color: var(--dim); margin: 0 0 3px; }
-.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-.tab { border: 1px solid var(--line); background: none; color: var(--dim); border-radius: 999px; padding: 4px 13px; font-size: 12px; font-weight: 600; cursor: pointer; }
-.tab.on { color: #fff; border-color: var(--acc); background: rgba(61, 139, 255, .12); }
-table.api { width: 100%; border-collapse: collapse; font-size: 13px; margin: 4px 0 12px; }
-table.api th, table.api td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
-#apiroutes li { padding: 4px 0; color: var(--dim); font-size: 13px; }
-.apiform { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 12px; }
-.af { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--dim); }
+.lab { font-size: .875rem; color: var(--muted); margin: 8px 0 4px; }
+table.api { display: block; overflow-x: auto; width: 100%; border-collapse: collapse; font-size: .875rem; margin: 4px 0 12px; }
+table.api th, table.api td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+table.api th { color: var(--muted); font-weight: 500; }
+#apiroutes li { padding: 4px 0; color: var(--muted); font-size: .875rem; }
+.apiform { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.af { display: flex; flex-direction: column; gap: 4px; font-size: .875rem; color: var(--muted); }
 .af input, .af select { margin: 0; }
 .appcols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-#statuslist li { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.appcols > * { min-width: 0; }
+#statuslist li { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
 #statuslist li:last-child { border: 0; }
-#statuslist small { display: block; color: var(--dim); font-size: 12px; }
-.dotc { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-top: 7px; flex: none; }
-.dotc.g { background: var(--ok); } .dotc.r { background: var(--alert); } .dotc.y { background: var(--warn); }
-@media (max-width: 1000px) { .layout { grid-template-columns: minmax(0, 1fr); } .appcols { grid-template-columns: 1fr; } }
+#statuslist b { font-weight: 500; }
+#statuslist small { display: block; color: var(--muted); font-size: .875rem; }
+.dotc { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-top: 8px; flex: none; }
+.dotc.g { background: var(--ok); } .dotc.r { background: var(--danger); } .dotc.y { background: var(--warn); }
+@media (max-width: 1000px) { .layout, .appcols { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 620px) { .app { padding: 16px 12px 48px; } .sec, .pane, .foot, details.more > summary, details.more > .inner { padding-left: 16px; padding-right: 16px; } .rulesgrid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (forced-colors: active) { .switch input { appearance: auto; -webkit-appearance: auto; } .switch input::before { display: none; } }
+
+/* Vetro components: one card per group, rows with a state chip, inline confirmation, toast, side drawer, disclosure */
+.lead { color: var(--muted); margin-top: 4px; }
+.col, .dev { background: none; border: 0; border-radius: 0; }
+.col { display: flex; flex-direction: column; gap: 16px; }
+.sec, details.more, .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-surface); }
+.foot { padding: 0; }
+.col > .msg { padding: 0; }
+.col > .msg:empty { display: none; }
+.pane { padding: 0; }
+.panel { padding: 16px 24px; min-width: 0; }
+.panel + .panel, .appcols + .panel { margin-top: 16px; }
+.panel h4 { font-size: 1rem; font-weight: 500; margin: 24px 0 8px; }
+.panel > h3 { display: flex; align-items: center; gap: 12px; font-size: 1.125rem; margin: 0 0 12px; }
+.section-icon { width: 26px; height: 26px; flex: none; fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+label.lab { display: block; }
+#statuslist li { align-items: center; justify-content: space-between; }
+#statuslist li > div { min-width: 0; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r); margin-bottom: 12px; }
+table.api { display: table; margin: 0; }
+table.api tr:last-child td { border-bottom: 0; }
+details.help { margin-top: 8px; }
+details.help summary { cursor: pointer; min-height: 44px; padding: 10px 0; width: max-content; max-width: 100%; color: var(--muted); font-size: .875rem; }
+details.help summary:hover { color: var(--text); }
+.inline-confirm { background: var(--warn-soft); border: 1px solid var(--warn-line); border-radius: var(--r); padding: 12px 16px; margin-top: 12px; font-size: .875rem; }
+.inline-confirm p { margin: 0 0 12px; }
+.inline-confirm .warnbtn { background: var(--warn); border-color: var(--warn); color: #101c35; font-weight: 500; }
+.inline-confirm .warnbtn:hover:not(:disabled) { background: var(--warn); border-color: #101c35; }
+.msg.ok { display: none; }
+#toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; width: max-content; max-width: min(440px, calc(100% - 32px)); padding: 8px 16px; border: 1px solid var(--ok-line); border-radius: var(--r); background: rgba(16, 28, 53, .88); backdrop-filter: blur(8px); font-size: .875rem; overflow-wrap: anywhere; pointer-events: none; z-index: 60; }
+#toast::before { content: ""; width: 14px; height: 8px; flex: none; border-left: 2px solid var(--ok); border-bottom: 2px solid var(--ok); transform: rotate(-45deg); }
+.modal { place-items: stretch end; padding: 0; }
+.dlg { width: min(480px, 100%); max-height: none; height: 100%; border-width: 0 0 0 1px; border-radius: 0; }
+@media (max-width: 620px) { .panel { padding: 16px; } }
+
+/* usability: the preview stays in view, time fields, list entries that are buttons, three levels in a row */
+@media (min-width: 1001px) { .stage { position: sticky; top: 16px; } }
+input[type=time] { min-height: 44px; width: 100%; min-width: 0; margin-bottom: 8px; padding: 8px 16px; }
+input:disabled, select:disabled { opacity: .45; cursor: default; }
+.levels { grid-template-columns: repeat(3, 1fr); }
+button.rl { display: block; width: 100%; text-align: left; background: transparent; border-color: var(--border); }
+button.rl[aria-pressed=true] { border-color: var(--accent-line); background: var(--accent-soft); }
+@media (max-width: 420px) { .levels { grid-template-columns: 1fr; } }
+/* the top bar of every Shard: one row across the whole width (name, state chips, language) */
+.app { padding-top: 16px; }
+.top { gap: 12px 16px; margin-bottom: 12px; }
+.brand { flex: 1 1 360px; min-width: 0; }
+h1 { font-size: 1.25rem; }
+.lead { margin-top: 0; font-size: .875rem; }
+.sub { margin: 0 0 0 auto; justify-content: flex-end; align-items: center; }
+.chip.plain::before { display: none; }
+.dtabs { margin-bottom: 16px; }
+@media (max-width: 620px) { .brand { flex: 1 1 0; } .lead { display: none; } .lang { order: 1; } .sub { order: 2; flex-basis: 100%; justify-content: flex-start; margin: 0; } }
 </style>
 </head>
 <body>
@@ -173,61 +255,22 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
       <div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7"/><path d="M10 19a2 2 0 0 0 4 0"/></svg></div>
       <div>
         <h1 data-t="title">Notification Center</h1>
-        <div class="sub" id="chips"></div>
+        <p class="lead" data-t="lead">Send messages to this TV and choose how they look.</p>
       </div>
     </div>
-    <div class="lang"><button type="button" id="l-en">EN</button><button type="button" id="l-pt">PT</button></div>
+    <div class="sub" id="chips" role="status"></div>
+    <div class="lang" role="group" aria-label="Language / Idioma"><button type="button" id="l-en">EN</button><button type="button" id="l-pt">PT</button></div>
   </header>
 
-  <nav class="dtabs">
-    <button type="button" class="on" data-pane="p-main" data-t="tab_main">Send</button>
-    <button type="button" data-pane="p-test" data-t="test_tab">Try it</button>
-    <button type="button" data-pane="p-set" data-t="set_tab">Settings</button>
-    <button type="button" data-pane="p-rules" data-t="rules_tab">Senders and rules</button>
-    <button type="button" data-pane="p-tech" data-t="tech_tab">Technical</button>
+  <nav class="dtabs" role="tablist">
+    <button type="button" role="tab" aria-selected="true" class="on" data-pane="p-main" data-t="tab_main">Send</button>
+    <button type="button" role="tab" aria-selected="false" tabindex="-1" data-pane="p-test" data-t="test_tab">Try it</button>
+    <button type="button" role="tab" aria-selected="false" tabindex="-1" data-pane="p-rules" data-t="rules_tab">Senders and rules</button>
+    <button type="button" role="tab" aria-selected="false" tabindex="-1" data-pane="p-set" data-t="set_tab">Settings</button>
+    <button type="button" role="tab" aria-selected="false" tabindex="-1" data-pane="p-tech" data-t="tech_tab">System</button>
   </nav>
 
   <main class="layout" id="p-main">
-    <section class="col">
-      <div class="sec">
-        <h2 data-t="s1">1 - Write the message</h2>
-        <input type="text" id="title" maxlength="40" data-p="ph_title">
-        <input type="text" id="message" maxlength="200" data-p="ph_msg">
-      </div>
-      <div class="sec">
-        <h2 data-t="s2">2 - Choose how it looks</h2>
-        <div class="lab" data-t="lab_kind">What kind of message is it?</div>
-        <div class="levels" id="levels"></div>
-        <div class="lab" data-t="lab_how">How should it appear on the TV?</div>
-        <div class="modes" id="modes"></div>
-        <div class="hint" id="modehint"></div>
-      </div>
-      <details class="more">
-        <summary data-t="more">More options (sound, pictures, how long)</summary>
-        <div class="inner">
-          <div class="lab" data-t="lab_sound">Sound</div>
-          <div class="row"><select id="sound" style="flex:1"></select><span style="display:flex;align-items:center;gap:8px;flex:1;min-width:200px"><span class="lab" style="margin:0" data-t="f_mvol">Sound volume (%)</span><input type="range" id="mvol" min="10" max="100" step="5" value="100" style="flex:1;min-width:80px"><b id="mvolv">100%</b></span></div>
-          <div class="lab" data-t="lab_pic">Picture (only used where the look has room for one)</div>
-          <div class="stack"><input type="text" id="image" maxlength="290" data-p="ph_image"><input type="text" id="app" maxlength="64" data-p="ph_app"></div>
-          <div class="lab" data-t="lab_wall">Background of the full-screen card</div>
-          <div class="stack"><select id="theme"><option value="">-</option></select><input type="text" id="wallpaper" maxlength="290" data-p="ph_wall"></div>
-          <div class="lab" data-t="lab_prio">How urgent is it?</div>
-          <select id="priority"><option value="" data-t="pr_normal">Normal</option><option value="high" data-t="pr_high">High: first in line, shown even in quiet hours</option></select>
-          <div class="lab" data-t="lab_act">A button on the full-screen card that opens an app</div>
-          <div class="row"><input type="text" id="act_app" list="applist" maxlength="64" data-p="ph_actapp" style="flex:1"><input type="text" id="act_label" maxlength="24" data-p="ph_actlabel" style="flex:1"></div>
-          <datalist id="applist"></datalist>
-          <div class="lab" data-t="lab_icon">A different icon (an emoji)</div>
-          <input type="text" id="icon" maxlength="16" data-p="ph_icon">
-          <div class="dur"><span data-t="secs">Show for (s)</span><input type="range" id="secs" min="1" max="60" value="8"><b id="secsv">8 s</b></div>
-          <label class="chk" style="margin-top:10px"><input type="checkbox" id="open" checked> <span data-t="open">Show on TV now</span></label>
-        </div>
-      </details>
-      <div class="foot">
-        <button class="send" id="send" type="button" data-t="btn">Send</button>
-      </div>
-      <div class="msg" id="result"></div>
-    </section>
-
     <aside class="stage">
       <div class="tv"><svg id="scene" class="scene" viewBox="0 0 1920 1080" role="img" font-family="SamsungOneUI, system-ui, Segoe UI, sans-serif" font-weight="500">
       <defs>
@@ -244,9 +287,49 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
       <g id="dyn"></g>
     </svg></div>
       <p class="note" data-t="prevnote">The TV shows its own native banner; this is only an approximation.</p>
-      <div class="rhead"><h2 data-t="recent">Recently sent</h2><button class="ghost" id="refresh" type="button" data-t="refresh">Refresh</button></div>
-      <ul id="recent"></ul>
     </aside>
+
+    <section class="col">
+      <div class="sec">
+        <h2 data-t="s2">Choose how it looks</h2>
+        <div class="lab" data-t="lab_kind">What kind of message is it?</div>
+        <div class="levels" id="levels"></div>
+        <div class="lab" data-t="lab_how">How should it appear on the TV?</div>
+        <div class="modes" id="modes"></div>
+        <div class="hint" id="modehint"></div>
+      </div>
+      <div class="sec">
+        <h2 data-t="s1">Write the message</h2>
+        <label class="lab" for="title" data-t="f_title">Title (optional)</label>
+        <input type="text" id="title" maxlength="40" data-p="ph_title">
+        <label class="lab" for="message" data-t="f_msg">Message</label>
+        <input type="text" id="message" maxlength="200" data-p="ph_msg">
+      </div>
+      <details class="more">
+        <summary data-t="more">More options (sound, pictures, how long)</summary>
+        <div class="inner">
+          <label class="lab" for="sound" data-t="lab_sound">Sound</label>
+          <div class="row"><select id="sound" style="flex:1"></select><span style="display:flex;align-items:center;gap:8px;flex:1;min-width:200px"><span class="lab" style="margin:0" data-t="f_mvol">Sound volume (%)</span><input type="range" id="mvol" min="10" max="100" step="5" value="100" style="flex:1;min-width:80px"><b id="mvolv">100%</b></span></div>
+          <label class="lab" for="image" data-t="lab_pic">Picture (only used where the look has room for one)</label>
+          <div class="stack"><input type="text" id="image" maxlength="290" data-p="ph_image"><input type="text" id="app" maxlength="64" data-p="ph_app"></div>
+          <label class="lab" for="theme" data-t="lab_wall">Background of the full-screen card</label>
+          <div class="stack"><select id="theme"><option value="">-</option></select><input type="text" id="wallpaper" maxlength="290" data-p="ph_wall"></div>
+          <label class="lab" for="priority" data-t="lab_prio">How urgent is it?</label>
+          <select id="priority"><option value="" data-t="pr_normal">Normal</option><option value="high" data-t="pr_high">High: first in line, shown even in quiet hours</option></select>
+          <label class="lab" for="act_app" data-t="lab_act">A button on the full-screen card that opens an app</label>
+          <div class="row"><input type="text" id="act_app" list="applist" maxlength="64" data-p="ph_actapp" style="flex:1"><input type="text" id="act_label" maxlength="24" data-p="ph_actlabel" style="flex:1"></div>
+          <datalist id="applist"></datalist>
+          <label class="lab" for="icon" data-t="lab_icon">A different icon (an emoji)</label>
+          <div class="row"><input type="text" id="icon" maxlength="16" data-p="ph_icon" style="flex:1"><button type="button" id="iconpick" data-t="pick">Choose icon</button></div>
+          <div class="dur"><span data-t="secs">Show for (s)</span><input type="range" id="secs" min="1" max="60" value="8"><b id="secsv">8 s</b></div>
+          <div class="setting"><label for="open" id="open-name" data-t="open">Show on TV now</label><label class="switch"><input type="checkbox" role="switch" id="open" aria-labelledby="open-name" checked><span aria-hidden="true"></span></label></div>
+        </div>
+      </details>
+      <div class="foot">
+        <button class="send" id="send" type="button" data-t="btn">Send</button>
+      </div>
+      <div class="msg" id="result"></div>
+    </section>
   </main>
 
   <section class="dev" id="devwrap" hidden>
@@ -257,21 +340,27 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
           <div class="msg" style="padding:0 0 8px" data-t="src_note">One entry per sender. Its defaults fill in what a request leaves out; a key makes it require the header X-NC-Key.</div>
           <ul id="srclist"></ul>
           <div class="rulesgrid" style="margin-top:10px">
-            <div><div class="lab" data-t="f_name">Name</div><input type="text" id="s_name" maxlength="32" placeholder="doorbell"></div>
-            <div><div class="lab" data-t="f_icon">Icon</div><input type="text" id="s_icon" maxlength="16"></div>
-            <div><div class="lab" data-t="f_level">Level</div><select id="s_level"><option value=""></option><option>info</option><option>ok</option><option>warn</option><option>alert</option></select></div>
-            <div><div class="lab" data-t="f_mode">Show as</div><select id="s_mode"><option value=""></option><option>banner</option><option>full</option><option>both</option><option>overlay</option></select></div>
-            <div><div class="lab" data-t="f_theme">Default wallpaper</div><select id="s_theme"><option value=""></option></select></div>
-            <div><div class="lab" data-t="lab_prio">How urgent is it?</div><select id="s_priority"><option value="">normal</option><option value="high">high</option></select></div>
-            <div><div class="lab" data-t="f_dur">Duration (s)</div><input type="text" id="s_dur" maxlength="2"></div>
-            <div><div class="lab" data-t="f_rate">Max per minute (0 = no limit)</div><input type="text" id="s_rate" maxlength="3"></div>
-            <div><div class="lab" data-t="f_sound">Sound</div><select id="s_sound"></select></div>
-            <div><div class="lab" data-t="f_vol">Volume (%)</div><input type="text" id="s_vol" maxlength="3"></div>
+            <div><label class="lab" for="s_name" data-t="f_name">Name</label><input type="text" id="s_name" maxlength="32" placeholder="doorbell"></div>
+            <div><label class="lab" for="s_icon" data-t="f_icon">Icon</label><input type="text" id="s_icon" maxlength="16"></div>
+            <div><label class="lab" for="s_level" data-t="f_level">Level</label><select id="s_level"><option value=""></option><option>info</option><option>ok</option><option>warn</option><option>alert</option></select></div>
+            <div><label class="lab" for="s_mode" data-t="f_mode">Show as</label><select id="s_mode"><option value=""></option><option>banner</option><option>full</option><option>both</option><option>overlay</option></select></div>
+            <div><label class="lab" for="s_theme" data-t="f_theme">Default wallpaper</label><select id="s_theme"><option value=""></option></select></div>
+            <div><label class="lab" for="s_priority" data-t="lab_prio">How urgent is it?</label><select id="s_priority"><option value="">normal</option><option value="high">high</option></select></div>
+            <div><label class="lab" for="s_dur" data-t="f_dur">Duration (s)</label><input type="text" id="s_dur" inputmode="numeric" maxlength="2"></div>
+            <div><label class="lab" for="s_rate" data-t="f_rate">Max per minute (0 = no limit)</label><input type="text" id="s_rate" inputmode="numeric" maxlength="3"></div>
+            <div><label class="lab" for="s_sound" data-t="f_sound">Sound</label><select id="s_sound"></select></div>
+            <div><label class="lab" for="s_vol" data-t="f_vol">Volume (%)</label><input type="text" id="s_vol" inputmode="numeric" maxlength="3"></div>
           </div>
-          <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="s_on" checked> <span data-t="f_enabled">Enabled</span></label>
-          <div class="row"><button type="button" class="send" id="s_save" data-t="save">Save</button><button type="button" class="ghost" id="s_key" data-t="gen_key">New key</button><button type="button" class="ghost" id="s_clearkey" data-t="clear_key">Remove key</button><button type="button" class="ghost" id="s_del" data-t="del">Delete</button></div>
+          <div class="setting"><label for="s_on" id="s_on-name" data-t="f_enabled">Enabled</label><label class="switch"><input type="checkbox" role="switch" id="s_on" aria-labelledby="s_on-name" checked><span aria-hidden="true"></span></label></div>
+          <div class="row"><button type="button" class="send" id="s_save" data-t="save">Save</button><button type="button" class="ghost" id="s_key" data-t="gen_key">New key</button><button type="button" class="ghost" id="s_clearkey" data-t="clear_key">Remove key</button><button type="button" class="ghost danger" id="s_del" data-t="del">Delete</button></div>
           <div class="msg" id="srcmsg" style="padding:8px 0 0"></div>
           <pre id="srckey" hidden></pre>
+          <h3 data-t="r_title">Repeats and unknown senders</h3>
+          <label class="lab" for="g_secs" data-t="g_secs">Count repeats inside (s, 0 = off)</label>
+          <input type="text" id="g_secs" inputmode="numeric" maxlength="4">
+          <div class="setting"><label for="g_strict" id="g_strict-name" data-t="g_strict">Refuse senders that have no source entry</label><label class="switch"><input type="checkbox" role="switch" id="g_strict" aria-labelledby="g_strict-name"><span aria-hidden="true"></span></label></div>
+          <div class="row"><button type="button" class="send" id="r_save" data-t="save">Save</button></div>
+          <div class="msg" id="rmsg"></div>
         </div>
         <div>
 
@@ -279,17 +368,17 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
           <div class="msg" style="padding:0 0 8px" data-t="h_note">Turn any JSON a service already sends into a notification. Use {{path.to.value}} from the JSON in the texts.</div>
           <ul id="hooklist"></ul>
           <div class="rulesgrid" style="margin-top:10px">
-            <div><div class="lab" data-t="f_name">Name</div><input type="text" id="h_name" maxlength="24" placeholder="github"></div>
-            <div><div class="lab" data-t="f_icon">Icon</div><input type="text" id="h_icon" maxlength="16"></div>
+            <div><label class="lab" for="h_name" data-t="f_name">Name</label><input type="text" id="h_name" maxlength="24" placeholder="github"></div>
+            <div><label class="lab" for="h_icon" data-t="f_icon">Icon</label><input type="text" id="h_icon" maxlength="16"></div>
           </div>
-          <div class="lab" data-t="h_ttl">Title template</div><input type="text" id="h_ttl" maxlength="200" placeholder="{{repository.name}}">
-          <div class="lab" data-t="h_msg">Message template (required)</div><input type="text" id="h_msg" maxlength="200" placeholder="{{pusher.name}} pushed {{head_commit.message}}">
+          <label class="lab" for="h_ttl" data-t="h_ttl">Title template</label><input type="text" id="h_ttl" maxlength="200" placeholder="{{repository.name}}">
+          <label class="lab" for="h_msg" data-t="h_msg">Message template (required)</label><input type="text" id="h_msg" maxlength="200" placeholder="{{pusher.name}} pushed {{head_commit.message}}">
           <div class="rulesgrid">
-            <div><div class="lab" data-t="f_level">Level</div><input type="text" id="h_level" maxlength="40" placeholder="info"></div>
-            <div><div class="lab" data-t="h_src">Source (default: the name)</div><input type="text" id="h_src" maxlength="32"></div>
-            <div><div class="lab" data-t="f_sound">Sound</div><select id="h_sound"></select></div>
+            <div><label class="lab" for="h_level" data-t="f_level">Level</label><input type="text" id="h_level" maxlength="40" placeholder="info"></div>
+            <div><label class="lab" for="h_src" data-t="h_src">Source (default: the name)</label><input type="text" id="h_src" maxlength="32"></div>
+            <div><label class="lab" for="h_sound" data-t="f_sound">Sound</label><select id="h_sound"></select></div>
           </div>
-          <div class="row"><button type="button" class="send" id="h_save" data-t="save">Save</button><button type="button" class="ghost" id="h_del" data-t="del">Delete</button></div>
+          <div class="row"><button type="button" class="send" id="h_save" data-t="save">Save</button><button type="button" class="ghost danger" id="h_del" data-t="del">Delete</button></div>
           <div class="msg" id="hmsg" style="padding:8px 0 0"></div>
           <pre id="hurl" hidden></pre>
         </div>
@@ -310,6 +399,8 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
           <div class="msg" style="padding:0 0 4px" data-t="clubs_note">The Bottom toast with the crest and the colour of the club, as the Match alerts sends it.</div>
           <div class="exgrid" id="clubgrid"></div>
           <div class="msg" id="exmsg" style="padding:6px 0 0"></div>
+        </div>
+        <div>
           <h3 style="margin-top:22px" data-t="t_show">Try each way to show a message</h3>
           <div class="row"><button type="button" class="ghost" data-stm="banner" data-t="st_tb">Default Notification</button><button type="button" class="ghost" data-stm="full" data-t="st_tc">Full screen</button><button type="button" class="ghost" data-stm="both" data-t="st_tboth">Both</button><button type="button" class="ghost" data-stm="overlay" data-t="st_to">Bottom toast</button></div>
           <div class="msg" id="stmsg" style="padding:8px 0 0"></div>
@@ -320,88 +411,98 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
           <div class="msg" style="padding:0 0 8px" data-t="t_goodie_note">About 10 seconds of a well-known tune, played only with the notification sounds (you recognise it by the rhythm).</div>
           <div class="row"><span id="tsongs" class="row"></span><button type="button" class="ghost" id="tsongstop" data-t="t_stop">Stop</button></div>
         </div>
-        <div>
-          <h3 data-t="ok_title">Is everything working?</h3>
-          <ul id="statuslist"></ul>
-        </div>
       </div>
     </div>
     <div class="pane" id="p-set" hidden>
       <div class="appcols">
         <div>
-          <h3 data-t="set_sound">Sound</h3>
-          <div class="lab" data-t="f_mvol">Sound volume (%)</div>
-          <div class="row"><input type="range" id="tmvol" min="10" max="100" step="5" value="100" style="flex:1"><b id="tmvolv">100%</b></div>
-          <div class="lab" style="margin-top:12px" data-t="f_delay">The sound starts this long after the notification is sent (ms)</div>
-          <div class="row"><input type="range" id="tdelay" min="0" max="10000" step="100" value="3000" style="flex:1"><b id="tdelayv">3000 ms</b></div>
-          <div class="msg" style="padding:4px 0 0" data-t="f_delay_note">The banner appears a few seconds after the request. Press "Send a notification with this sound" below and move this slider until the sound and the banner arrive together.</div>
-          <div class="lab" style="margin-top:12px" data-t="f_vol">Volume (%)</div>
-          <div class="row"><input type="range" id="tvol" min="10" max="100" step="5" value="100" style="flex:1"><b id="tvolv">100%</b></div>
-          <div class="row" style="margin-top:12px"><button type="button" class="send" id="tsend" data-t="t_send_sound">Send a notification with this sound</button></div>
-          <div class="msg" id="tsmsg" style="padding:8px 0 0"></div>
-          <h3 style="margin-top:22px" data-t="t_custom">Your own sounds (WAV, up to 10 s and 1 MB)</h3>
-          <div class="msg" style="padding:0 0 8px" data-t="t_custom_note">Add a sound, such as a goal cheer, and choose it by its name when you send a notification.</div>
-          <div class="row"><input type="text" id="cname" maxlength="24" data-p="ph_cname" style="flex:1"><input type="file" id="cfile" accept=".wav,audio/wav" style="flex:2"><button type="button" class="ghost" id="cup" data-t="t_upload">Upload</button></div>
-          <div class="row" id="clist" style="margin-top:6px"></div>
-          <h3 style="margin-top:26px" data-t="cp_title">Copy this setup to another TV</h3>
-          <div class="msg" style="padding:0 0 8px" data-t="cp_note">Save your settings, senders, webhooks and, if you want, your sounds in one file, then load that file on another TV that has the Notification Center.</div>
-          <label class="chk"><input type="checkbox" id="cp_sounds"> <span data-t="cp_sounds">Include my sounds (the file gets bigger)</span></label>
-          <label class="chk" style="margin-top:6px"><input type="checkbox" id="cp_keys"> <span data-t="cp_keys">Include the keys of the senders (keep the file private)</span></label>
-          <div class="row" style="margin-top:10px"><button type="button" class="send" id="cp_save" data-t="cp_save">Download the setup file</button></div>
-          <div class="lab" style="margin-top:14px" data-t="cp_load">Load a setup file</div>
-          <div class="row"><input type="file" id="cp_file" accept=".json,application/json" style="flex:1"><button type="button" class="ghost" id="cp_up" data-t="cp_up">Load it</button></div>
-          <div class="msg" id="cp_msg" style="padding:8px 0 0"></div>
-        </div>
-        <div>
-          <h3 data-t="set_toast">Bottom toast</h3>
-          <div class="lab" data-t="f_ovop">Opacity of the bar background (%)</div>
+          <h3 data-t="set_notif">Notification</h3>
+          <div class="setting"><label for="tbao" id="tbao-name" data-t="tbao">Show banners as a bottom toast</label><label class="switch"><input type="checkbox" role="switch" id="tbao" aria-labelledby="tbao-name"><span aria-hidden="true"></span></label></div>
+          <label class="lab" for="tovop" data-t="f_ovop">Opacity of the bar background (%)</label>
           <div class="row"><input type="range" id="tovop" min="20" max="100" step="2" value="88" style="flex:1"><b id="tovopv">88%</b></div>
-          <h3 style="margin-top:22px" data-t="q_title">Quiet hours and repeats</h3>
-          <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="q_on"> <span data-t="q_on">Quiet hours</span></label>
-          <div class="rulesgrid">
-            <div><div class="lab" data-t="q_from">From (HH:MM)</div><input type="text" id="q_from" maxlength="5"></div>
-            <div><div class="lab" data-t="q_to">To (HH:MM)</div><input type="text" id="q_to" maxlength="5"></div>
-          </div>
-          <div class="lab" data-t="q_allow">Still show</div>
-          <select id="q_allow"><option value="alert">alert</option><option value="warn">warn + alert</option><option value="none">nothing</option></select>
-          <div class="lab" data-t="g_secs">Count repeats inside (s, 0 = off)</div>
-          <input type="text" id="g_secs" maxlength="4">
-          <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="g_strict"> <span data-t="g_strict">Refuse senders that have no source entry</span></label>
-          <div class="row"><button type="button" class="send" id="q_save" data-t="save">Save</button></div>
-          <div class="msg" id="qmsg" style="padding:8px 0 0"></div>
-          <h3 style="margin-top:22px" data-t="th_title">Wallpapers</h3>
+          <div class="row"><button type="button" id="ttest" data-t="b_test">Test</button></div>
+          <div class="msg" id="tnmsg"></div>
+          <h4 data-t="th_title">Wallpapers</h4>
           <div class="msg" style="padding:0 0 8px" data-t="th_note">Sport and News come with the Notification Center. Add your own with a name and the address of a picture; then choose it by name when you send, or give it to a sender.</div>
           <div class="row"><input type="text" id="th_name" maxlength="24" data-p="ph_thname" style="flex:1"><input type="text" id="th_url" maxlength="290" data-p="ph_thurl" style="flex:2"><button type="button" class="ghost" id="th_add" data-t="th_add">Add</button></div>
           <div class="row" id="themelist" style="margin-top:6px"></div>
           <div class="msg" id="th_msg" style="padding:6px 0 0"></div>
+          <h3 data-t="set_sound">Sound</h3>
+          <label class="lab" for="tone" data-t="f_one">One sound for everything</label>
+          <select id="tone"></select>
+          <label class="lab" for="tmvol" data-t="f_mvol">Sound volume (%)</label>
+          <div class="row"><input type="range" id="tmvol" min="10" max="100" step="5" value="100" style="flex:1"><b id="tmvolv">100%</b></div>
+          <label class="lab" for="tdelay" style="margin-top:12px" data-t="f_delay">The sound starts this long after the notification is sent (ms)</label>
+          <div class="row"><input type="range" id="tdelay" min="0" max="10000" step="100" value="3000" style="flex:1"><b id="tdelayv">3000 ms</b></div>
+          <details class="help"><summary data-t="how">How to tune it</summary><div class="msg" style="padding:4px 0 0" data-t="f_delay_note">The banner appears a few seconds after the request. Press "Send a notification with this sound" below and move this slider until the sound and the banner arrive together.</div></details>
+          <label class="lab" for="tvol" style="margin-top:12px" data-t="f_tvol">Volume for this test only (%)</label>
+          <div class="row"><input type="range" id="tvol" min="10" max="100" step="5" value="100" style="flex:1"><b id="tvolv">100%</b></div>
+          <div class="row" style="margin-top:12px"><button type="button" class="send" id="tsend" data-t="t_send_sound">Send a notification with this sound</button></div>
+          <div class="msg" id="tsmsg" style="padding:8px 0 0"></div>
+          <h4 data-t="t_custom">Your own sounds (WAV, up to 10 s and 1 MB)</h4>
+          <div class="msg" style="padding:0 0 8px" data-t="t_custom_note">Add a sound, such as a goal cheer, and choose it by its name when you send a notification.</div>
+          <div class="row"><input type="text" id="cname" maxlength="24" data-p="ph_cname" style="flex:1"><input type="file" id="cfile" accept=".wav,audio/wav" style="flex:2"><button type="button" class="ghost" id="cup" data-t="t_upload">Upload</button></div>
+          <div class="row" id="clist" style="margin-top:6px"></div>
+        </div>
+        <div>
+          <h3 data-t="q_title">Quiet hours</h3>
+          <div class="setting"><label for="q_on" id="q_on-name" data-t="q_on">Quiet hours</label><label class="switch"><input type="checkbox" role="switch" id="q_on" aria-labelledby="q_on-name"><span aria-hidden="true"></span></label></div>
+          <div class="rulesgrid">
+            <div><label class="lab" for="q_from" data-t="q_from">From (HH:MM)</label><input type="time" id="q_from"></div>
+            <div><label class="lab" for="q_to" data-t="q_to">To (HH:MM)</label><input type="time" id="q_to"></div>
+          </div>
+          <label class="lab" for="q_allow" data-t="q_allow">Still show</label>
+          <select id="q_allow"><option value="alert">alert</option><option value="warn">warn + alert</option><option value="none">nothing</option></select>
+          <div class="row"><button type="button" class="send" id="q_save" data-t="save">Save</button></div>
+          <div class="msg" id="qmsg"></div>
+          <h3 data-t="cp_title">Copy this setup to another TV</h3>
+          <div class="msg" style="padding:0 0 8px" data-t="cp_note">Get your settings, senders, webhooks and, if you want, your sounds as one text, then load it on another TV that has the Notification Center.</div>
+          <div class="setting"><label for="cp_sounds" id="cp_sounds-name" data-t="cp_sounds">Include my sounds (the file gets bigger)</label><label class="switch"><input type="checkbox" role="switch" id="cp_sounds" aria-labelledby="cp_sounds-name"><span aria-hidden="true"></span></label></div>
+          <div class="setting"><label for="cp_keys" id="cp_keys-name" data-t="cp_keys">Include the keys of the senders (keep the file private)</label><label class="switch"><input type="checkbox" role="switch" id="cp_keys" aria-labelledby="cp_keys-name"><span aria-hidden="true"></span></label></div>
+          <div class="row" style="margin-top:10px"><button type="button" class="send" id="cp_save" data-t="cp_save">Show the setup</button> <button type="button" class="ghost" id="cp_copy" data-t="cp_copy">Copy the text</button></div>
+          <textarea id="cp_out" readonly rows="6" spellcheck="false" style="display:none"></textarea>
+          <div class="msg" id="cp_url" style="padding:6px 0 0;word-break:break-all"></div>
+          <label class="lab" for="cp_file" style="margin-top:14px" data-t="cp_load">Load a setup file</label>
+          <div class="row"><input type="file" id="cp_file" accept=".json,application/json" style="flex:1"><button type="button" class="ghost" id="cp_up" data-t="cp_up">Load it</button></div>
+          <textarea id="cp_in" rows="3" spellcheck="false" data-p="ph_cpin" placeholder="...or paste the setup text here"></textarea>
+          <div class="msg" id="cp_msg" style="padding:8px 0 0"></div>
+          <div class="row" style="margin-top:12px"><button type="button" class="danger" id="cp_reset" data-t="b_reset">Reset settings</button></div>
         </div>
       </div>
     </div>
     <div class="pane" id="p-tech" hidden>
       <div class="appcols">
         <div>
+          <h3 data-t="ok_title">Is everything working?</h3>
+          <ul id="statuslist"></ul>
           <h3 data-t="app">Companion app</h3>
           <div class="msg" style="padding:0 0 10px" data-t="appnote">Launches NotifCtr01.NotifCenter (fixed id). It must be installed on the TV, see the README.</div>
           <h3 data-t="curl">Send from another device</h3>
           <pre id="curl"></pre>
-        </div>
-      </div>
       <h3 style="margin-top:26px" data-t="rq_title">Request for other apps and Shards</h3>
       <div class="tabs" id="reqtabs"></div>
       <pre id="reqcode"></pre>
       <div class="row" style="margin-top:10px"><button type="button" class="ghost" id="reqcopy" data-t="copy">Copy</button></div>
       <h3 style="margin-top:26px" data-t="api_title">API</h3>
       <div class="msg" id="apiver" style="padding:0 0 8px"></div>
-      <table class="api"><thead><tr><th data-t="th_field">Field</th><th data-t="th_type">Type</th><th data-t="th_default">Default</th><th data-t="th_meaning">Meaning</th></tr></thead><tbody id="apifields"></tbody></table>
+      <div class="table-wrap"><table class="api"><thead><tr><th data-t="th_field">Field</th><th data-t="th_type">Type</th><th data-t="th_default">Default</th><th data-t="th_meaning">Meaning</th></tr></thead><tbody id="apifields"></tbody></table></div>
       <ul id="apiroutes"></ul>
-      <div class="msg" style="padding:8px 0 0">API.md</div>
       <h3 style="margin-top:26px" data-t="api_try">Try the API</h3>
       <div id="apiform" class="apiform"></div>
       <div class="row" style="margin-bottom:10px"><button type="button" class="send" id="apitry" data-t="send_btn">Send</button></div>
       <pre id="apiout"></pre>
+        </div>
+        <div>
+          <h3 data-t="recent">Recently sent</h3>
+          <div class="row"><button class="ghost" id="refresh" type="button" data-t="refresh">Refresh</button></div>
+          <ul id="recent"></ul>
+          <div class="msg" id="recmsg"></div>
+        </div>
+      </div>
     </div>
   </section>
 </div>
+<div id="toast" role="status" aria-live="polite" hidden></div>
 <div class="modal" id="picker" hidden>
   <div class="dlg" role="dialog" aria-modal="true">
     <div class="dhead"><h2 data-t="pick_title">Choose an icon</h2><button type="button" class="ghost" id="pclose" data-t="close">Close</button></div>
@@ -457,15 +558,13 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
   }
   function icon(l) { return iconSvg(l, 24); }
   function paintLevels() {
-    var custom = $("icon").value, shown = ["info", "warn", "alert"];
+    var shown = ["info", "warn", "alert"];
     $("levels").innerHTML = shown.map(function (l) {
-      return '<button type="button" class="lv' + (l === level ? " on" : "") + '" data-l="' + l + '" style="--c:' + COLORS[l] + '"><i style="background:' + COLORS[l] + '">' + iconSvg(l, 22) + "</i>" + esc(tr(l)) + "</button>";
-    }).join("") + '<button type="button" class="lv' + (custom ? " on" : "") + '" id="lvpick" style="--c:#8fa3c8"><i style="background:' + (custom ? "transparent" : "#2a3550") + '">' +
-      (custom ? '<span style="font-size:15px">' + esc(custom) + "</span>" : '<svg width="14" height="14" viewBox="0 0 14 14" fill="#fff"><rect x="1" y="1" width="5" height="5" rx="1.5"/><rect x="8" y="1" width="5" height="5" rx="1.5"/><rect x="1" y="8" width="5" height="5" rx="1.5"/><rect x="8" y="8" width="5" height="5" rx="1.5"/></svg>') + "</i>" + esc(tr("pick")) + "</button>";
+      return '<button type="button" class="lv' + (l === level ? " on" : "") + '" aria-pressed="' + (l === level) + '" data-l="' + l + '" style="--c:' + COLORS[l] + '"><i style="background:' + COLORS[l] + '">' + iconSvg(l, 22) + "</i>" + esc(tr(l)) + "</button>";
+    }).join("");
     var b = $("levels").getElementsByTagName("button"), i;
     for (i = 0; i < b.length; i++) {
       b[i].addEventListener("click", function () {
-        if (this.id === "lvpick") { openPicker(); return; }
         level = this.getAttribute("data-l"); paintLevels(); preview();
       });
     }
@@ -474,7 +573,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     var MODES = ["banner", "full", "both", "overlay"];
     $("modehint").textContent = tr("mh_" + mode);
     $("modes").innerHTML = MODES.map(function (m) {
-      return '<button type="button" class="md' + (m === mode ? " on" : "") + '" data-m="' + m + '">' + esc(tr("m_" + m)) + "</button>";
+      return '<button type="button" class="md' + (m === mode ? " on" : "") + '" aria-pressed="' + (m === mode) + '" data-m="' + m + '">' + esc(tr("m_" + m)) + "</button>";
     }).join("");
     var b = $("modes").getElementsByTagName("button"), i;
     for (i = 0; i < b.length; i++) { b[i].addEventListener("click", function () { mode = this.getAttribute("data-m"); paintModes(); preview(); }); }
@@ -551,12 +650,85 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
           var n = lastRecent[parseInt(this.getAttribute("data-i"), 10)];
           if (!n) { return; }
           act(this, api("notify", { title: n.title, message: n.message, level: n.level, icon: n.icon, image: n.image, wallpaper: n.wallpaper, mode: n.mode, sound: n.sound, volume: n.volume, group: false, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked })
-            .then(function () { say(tr("resent"), "ok"); recent(); })
-            .catch(function (e) { say(e.message, "err"); throw e; }));
+            .then(function () { $("recmsg").textContent = tr("resent"); $("recmsg").className = "msg ok"; recent(); })
+            .catch(function (e) { $("recmsg").textContent = e.message; $("recmsg").className = "msg err"; throw e; }));
         });
       }
     }).catch(function (e) { say(e.message, "err"); throw e; });
   }
+  T.en.lead = "Send messages to this TV and choose how they look."; T.pt.lead = "Envie mensagens para esta TV e escolha como aparecem.";
+  T.en.how = "How to tune it"; T.pt.how = "Como afinar";
+  T.en.st_ok = "Done"; T.pt.st_ok = "Pronto"; T.en.st_no = "Missing"; T.pt.st_no = "Em falta"; T.en.st_check = "Check"; T.pt.st_check = "Verificar";
+  T.en.cancel = "Cancel"; T.pt.cancel = "Cancelar"; T.en.q_del = "Delete {n}? This cannot be undone."; T.pt.q_del = "Apagar {n}? N\u00E3o se pode anular.";
+  T.en.no_src = "No senders yet."; T.pt.no_src = "Ainda n\u00E3o h\u00E1 emissores."; T.en.no_hook = "No webhooks yet."; T.pt.no_hook = "Ainda n\u00E3o h\u00E1 webhooks.";
+  // One card per group, headed by a purpose icon, as on the Vetro dashboard.
+  (function () {
+    var P = {
+      tv: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>',
+      sound: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/>',
+      shield: '<path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/>',
+      clock: '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1L3.5 8.5M3.5 3.8v4.7h4.7M12 7.5V12l3 2"/>',
+      flask: '<path d="M9 3h6M10 3v6l-5.2 9.1A2 2 0 0 0 6.5 21h11a2 2 0 0 0 1.7-2.9L14 9V3"/><path d="M7.4 15h9.2"/>',
+      code: '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>'
+    };
+    var ICON = { set_notif: "tv", r_title: "shield", recent: "clock", ex_title: "flask", clubs_title: "tv", t_show: "tv", t_sound: "sound", t_goodie: "sound", ok_title: "shield", set_sound: "sound", t_custom: "sound", cp_title: "clock", set_toast: "tv", q_title: "clock", th_title: "tv", src_title: "shield", h_title: "code", app: "tv", curl: "code", rq_title: "code", api_title: "code", api_try: "flask" };
+    var boxes = document.querySelectorAll("#devwrap .appcols > div, #p-tech"), i, j, box, kids, card, el, h, key, span;
+    for (i = 0; i < boxes.length; i++) {
+      box = boxes[i]; kids = Array.prototype.slice.call(box.children); card = null;
+      for (j = 0; j < kids.length; j++) {
+        el = kids[j];
+        if (el.tagName === "H3") {
+          card = document.createElement("section"); card.className = "panel"; box.insertBefore(card, el);
+          el.removeAttribute("style");
+        }
+        if (card) { card.appendChild(el); }
+      }
+    }
+    h = document.querySelectorAll(".panel > h3");
+    for (i = 0; i < h.length; i++) {
+      key = h[i].getAttribute("data-t");
+      if (!ICON[key]) { continue; }
+      // the words move into a span, so that a change of language keeps the icon
+      span = document.createElement("span"); span.setAttribute("data-t", key); span.textContent = h[i].textContent;
+      h[i].removeAttribute("data-t");
+      h[i].innerHTML = '<svg class="section-icon" viewBox="0 0 24 24" aria-hidden="true">' + P[ICON[key]] + "</svg>";
+      h[i].appendChild(span);
+    }
+  })();
+  // A success shows as a toast; an error stays where the content is.
+  (function () {
+    var timer = null, list = document.querySelectorAll(".msg"), i, watch;
+    if (!window.MutationObserver) { return; }
+    watch = new MutationObserver(function (changes) {
+      var el = changes[changes.length - 1].target;
+      if (el.nodeType !== 1) { el = el.parentNode; }
+      if (!el || !/(^| )ok( |$)/.test(el.className) || !el.textContent) { return; }
+      $("toast").textContent = el.textContent; $("toast").hidden = false;
+      clearTimeout(timer); timer = setTimeout(function () { $("toast").hidden = true; }, 4000);
+    });
+    for (i = 0; i < list.length; i++) { watch.observe(list[i], { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["class"] }); }
+  })();
+  // Vetro's inline confirmation: the question next to the control, then the action or Cancel.
+  function confirmHere(btn, name, run, question, action) {
+    var old = document.querySelector(".inline-confirm"), box = document.createElement("div"), p = document.createElement("p"),
+      row = document.createElement("div"), yes = document.createElement("button"), no = document.createElement("button"), host = btn.parentNode;
+    if (old) { old.parentNode.removeChild(old); }
+    box.className = "inline-confirm"; box.setAttribute("role", "group"); p.textContent = question || tr("q_del").replace("{n}", name); p.id = "confirm-q"; box.setAttribute("aria-labelledby", p.id);
+    row.className = "row"; yes.type = "button"; yes.className = "warnbtn"; yes.textContent = action || tr("del"); no.type = "button"; no.textContent = tr("cancel");
+    function close() { if (box.parentNode) { box.parentNode.removeChild(box); } }
+    yes.addEventListener("click", function () { close(); btn.focus(); run(); });
+    no.addEventListener("click", function () { close(); btn.focus(); });
+    box.addEventListener("keydown", function (e) { if (e.key === "Escape") { close(); btn.focus(); } });
+    row.appendChild(yes); row.appendChild(no); box.appendChild(p); box.appendChild(row);
+    host.parentNode.insertBefore(box, host.nextSibling);
+    no.focus();
+  }
+  T.en.f_title = "Title (optional)"; T.pt.f_title = "T\u00EDtulo (opcional)"; T.en.f_msg = "Message"; T.pt.f_msg = "Mensagem";
+  T.en.ph_title = "e.g. Oven"; T.pt.ph_title = "ex.: Forno"; T.en.ph_msg = "e.g. Dinner is ready"; T.pt.ph_msg = "ex.: O jantar est\u00E1 pronto";
+  T.en.s1 = "Write the message"; T.pt.s1 = "Escreva a mensagem"; T.en.s2 = "Choose how it looks"; T.pt.s2 = "Escolha o aspeto";
+  T.en.need_msg = "Write a message first."; T.pt.need_msg = "Escreva primeiro uma mensagem.";
+  T.en.no_tv = "No answer from the TV"; T.pt.no_tv = "A TV n\u00E3o responde"; T.en.retry = "Try again"; T.pt.retry = "Tentar de novo";
+  T.en.f_tvol = "Volume for this test only (%)"; T.pt.f_tvol = "Volume s\u00F3 para este teste (%)";
   function applyLang() {
     document.documentElement.lang = lang;
     var els = document.querySelectorAll("[data-t]"), i;
@@ -564,6 +736,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     els = document.querySelectorAll("[data-p]");
     for (i = 0; i < els.length; i++) { els[i].placeholder = tr(els[i].getAttribute("data-p")); }
     $("l-en").className = lang === "en" ? "on" : ""; $("l-pt").className = lang === "pt" ? "on" : "";
+    $("l-en").setAttribute("aria-pressed", lang === "en"); $("l-pt").setAttribute("aria-pressed", lang === "pt");
     paintLevels(); paintModes(); preview(); recent().catch(function () {});
     loadStatus();   // the chips and the checks are words too
   }
@@ -572,7 +745,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
   function eRender() {
     if (!EMOJI) { return; }
     var q = $("esearch").value.toLowerCase().trim(), names = tr("groups").split(","), i, out = [];
-    $("ecats").innerHTML = names.map(function (n, k) { return '<button type="button" data-g="' + k + '"' + (k === ecat && !q ? ' class="on"' : "") + ">" + esc(n) + "</button>"; }).join("");
+    $("ecats").innerHTML = names.map(function (n, k) { return '<button type="button" data-g="' + k + '"' + ' aria-pressed="' + (k === ecat && !q) + '"' + (k === ecat && !q ? ' class="on"' : "") + ">" + esc(n) + "</button>"; }).join("");
     for (i = 0; i < EMOJI.list.length && out.length < 160; i++) {
       var e = EMOJI.list[i];
       if (q ? (e[2] + " " + e[3] + " " + e[4]).toLowerCase().indexOf(q) >= 0 : e[1] === ecat) { out.push(e); }
@@ -580,16 +753,24 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     $("egrid").innerHTML = out.map(function (e) { return '<button type="button" data-c="' + esc(e[0]) + '" title="' + esc(lang === "pt" ? e[3] : e[2]) + '">' + e[0] + "</button>"; }).join("");
     var cb = $("ecats").getElementsByTagName("button"), gb = $("egrid").getElementsByTagName("button"), j;
     for (j = 0; j < cb.length; j++) { cb[j].addEventListener("click", function () { ecat = parseInt(this.getAttribute("data-g"), 10); $("esearch").value = ""; eRender(); }); }
-    for (j = 0; j < gb.length; j++) { gb[j].addEventListener("click", function () { $("icon").value = this.getAttribute("data-c"); $("picker").hidden = true; paintLevels(); preview(); }); }
+    for (j = 0; j < gb.length; j++) { gb[j].addEventListener("click", function () { $("icon").value = this.getAttribute("data-c"); closePicker(); preview(); }); }
   }
+  function closePicker() { if ($("picker").hidden) { return; } $("picker").hidden = true; $("iconpick").focus(); }
+  $("iconpick").addEventListener("click", openPicker);
+  $("picker").addEventListener("keydown", function (e) {
+    if (e.key !== "Tab") { return; }
+    var f = this.querySelectorAll("button, input"), first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
   function openPicker() {
-    $("picker").hidden = false;
+    $("picker").hidden = false; $("pclose").focus();
     if (EMOJI) { eRender(); $("esearch").focus(); return; }
     api("emoji").then(function (d) { EMOJI = d; $("esrc").textContent = d.source; eRender(); $("esearch").focus(); }).catch(function (e) { say(e.message, "err"); });
   }
-  $("pclose").addEventListener("click", function () { $("picker").hidden = true; });
-  $("picker").addEventListener("click", function (e) { if (e.target === this) { this.hidden = true; } });
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { $("picker").hidden = true; } });
+  $("pclose").addEventListener("click", closePicker);
+  $("picker").addEventListener("click", function (e) { if (e.target === this) { closePicker(); } });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { closePicker(); } });
   $("esearch").addEventListener("input", eRender);
   // The button of the full-screen card: an installed app id and a short label (no id, no button).
   function actionObj() {
@@ -604,11 +785,9 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     more.addEventListener("toggle", function () {
       if (!more.open || loaded) { return; }
       loaded = true;
-      fetch("/apps").then(function (r) { return r.json(); }).then(function (d) {
-        var list = Array.isArray(d) ? d : (d.apps || []), dl = $("applist"), i, o, n = 0;
-        for (i = 0; i < list.length && n < 250; i++) {
-          if (list[i].show === true && /^[A-Za-z0-9._-]{1,64}$/.test(String(list[i].appId))) { o = document.createElement("option"); o.value = list[i].appId; o.label = String(list[i].name || ""); dl.appendChild(o); n += 1; }
-        }
+      fetch("apps").then(function (r) { return r.json(); }).then(function (d) {
+        var list = d.apps || [], dl = $("applist"), i, o;
+        for (i = 0; i < list.length; i++) { o = document.createElement("option"); o.value = list[i].appId; o.label = String(list[i].name || ""); dl.appendChild(o); }
       }).catch(function () { /* no suggestions: the id can still be typed */ });
     });
   })();
@@ -616,6 +795,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
   function setLang(l) { lang = l; applyLang(); api("lang", { lang: l }).catch(function (e) { say(e.message, "err"); }); }
   // The dashboard frame has no allow-forms: use buttons and the Enter key, not <form>.
   $("send").addEventListener("click", function () {
+    if (!$("message").value.trim()) { say(tr("need_msg"), "err"); $("message").focus(); return; }
     say(tr("sending"));
     act(this, api("notify", { title: $("title").value, message: $("message").value, level: level, icon: $("icon").value, image: $("image").value, app: $("app").value, theme: $("theme").value, priority: $("priority").value, action: actionObj(), wallpaper: $("wallpaper").value, mode: mode, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked, sound: $("sound").value, group: false })
       .then(function (r) { say(r.open === "not requested" ? tr("queuedq") : tr("queued"), "ok"); $("message").value = ""; preview(); recent().catch(function () {}); })
@@ -664,7 +844,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     return "curl -X POST " + u + "notify -H \"Content-Type: application/json\" -d '" + j.replace(/'/g, "'\\''") + "'";
   }
   function paintReq() {
-    $("reqtabs").innerHTML = REQ_TABS.map(function (t) { return '<button type="button" class="tab' + (t === reqTab ? " on" : "") + '" data-rt="' + t + '">' + t.toUpperCase() + "</button>"; }).join("");
+    $("reqtabs").innerHTML = REQ_TABS.map(function (t) { return '<button type="button" class="tab' + (t === reqTab ? " on" : "") + '" aria-pressed="' + (t === reqTab) + '" data-rt="' + t + '">' + t.toUpperCase() + "</button>"; }).join("");
     var b = $("reqtabs").getElementsByTagName("button"), i;
     for (i = 0; i < b.length; i++) { b[i].addEventListener("click", function () { reqTab = this.getAttribute("data-rt"); paintReq(); }); }
     $("reqcode").textContent = reqText();
@@ -705,12 +885,23 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
 
   function loadStatus() {
     return api("status").then(function (s) {
-      function row(ok, label, extra) { return '<li><span class="dotc ' + (ok === true ? "g" : ok === false ? "r" : "y") + '"></span><div><b>' + esc(label) + "</b>" + (extra ? "<small>" + esc(extra) + "</small>" : "") + "</div></li>"; }
+      function row(ok, label, extra) { return "<li><div><b>" + esc(label) + "</b>" + (extra ? "<small>" + esc(extra) + "</small>" : "") + '</div><span class="chip ' + (ok === true ? "g" : ok === false ? "r" : "y") + '">' + esc(tr(ok === true ? "st_ok" : ok === false ? "st_no" : "st_check")) + "</span></li>"; }
       $("statuslist").innerHTML = row(true, tr("st_shard"), "v" + s.version) + row(s.app, tr("st_app"), s.app ? "v" + s.appVersion : tr("st_appfix")) +
         row(s.service, tr("st_svc"), s.service ? "" : tr("st_svcfix")) + row(s.pairing === "on" ? true : null, tr("st_pair"), tr("st_pair_" + s.pairing));
       function chip(ok, t) { return '<span class="chip ' + (ok === true ? "g" : ok === false ? "r" : "y") + '">' + esc(t) + "</span>"; }
-      $("chips").innerHTML = chip(s.app, tr("c_app")) + chip(s.service, tr("c_svc")) + chip(s.pairing === "on" ? true : null, tr(s.pairing === "on" ? "c_pair_on" : "c_pair_off"));
-    }).catch(function (e) { $("statuslist").innerHTML = '<li class="empty">' + esc(e.message) + "</li>"; });
+      $("chips").innerHTML = chip(s.app, tr("c_app") + (s.app && s.appVersion ? " " + s.appVersion : "")) + chip(s.service, tr("c_svc")) + chip(s.pairing === "on" ? true : null, tr(s.pairing === "on" ? "c_pair_on" : "c_pair_off")) +
+        '<span class="chip plain">v' + esc(s.version) + "</span>";
+      // quiet hours explain why a notification does not show: a chip only while they are switched on
+      api("settings").then(function (d) {
+        var q = d.settings.quiet;
+        if (!q.enabled || $("qchip")) { return; }
+        $("chips").insertAdjacentHTML("afterbegin", '<span class="chip y" id="qchip">' + esc((lang === "pt" ? "Silêncio " : "Quiet hours ") + q.from + "–" + q.to) + "</span>");
+      }).catch(function () { /* the checks above are enough */ });
+    }).catch(function (e) {
+      $("statuslist").innerHTML = '<li class="empty">' + esc(e.message) + "</li>";
+      $("chips").innerHTML = '<span class="chip r">' + esc(tr("no_tv")) + '</span><button type="button" class="ghost" id="retry">' + esc(tr("retry")) + "</button>";
+      $("retry").addEventListener("click", function () { location.reload(); });
+    });
   }
   // Goals of four clubs with their crest (ESPN, as the Match alerts uses them) and a colour: shows that the logo follows the club.
   (function () {
@@ -755,12 +946,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
         var b = document.createElement("button");
         b.type = "button"; b.className = "ghost"; b.title = themeData.custom[n]; b.textContent = "\u2715 " + n;
         b.addEventListener("click", function () {
-          if (b.getAttribute("data-armed") !== "1") {
-            b.setAttribute("data-armed", "1"); b.textContent = tr("t_sure") + " " + n;
-            setTimeout(function () { b.setAttribute("data-armed", ""); b.textContent = "\u2715 " + n; }, 4000);
-            return;
-          }
-          act(b, api("themes", { name: n, delete: true }).then(loadThemes));
+          confirmHere(b, n, function () { act(b, api("themes", { name: n, delete: true }).then(loadThemes)); });
         });
         list.appendChild(b);
       });
@@ -807,8 +993,16 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     for (i = 0; i < tb.length; i++) {
       tb[i].addEventListener("click", function () {
         var id = this.getAttribute("data-pane"), j, p;
-        for (j = 0; j < tb.length; j++) { tb[j].className = tb[j] === this ? "on" : ""; p = $(tb[j].getAttribute("data-pane")); p.hidden = tb[j] !== this; }
+        for (j = 0; j < tb.length; j++) { var sel = tb[j] === this; tb[j].className = sel ? "on" : ""; tb[j].setAttribute("aria-selected", sel); tb[j].tabIndex = sel ? 0 : -1; p = $(tb[j].getAttribute("data-pane")); p.hidden = !sel; }
         $("devwrap").hidden = id === "p-main";
+      });
+      // Left and Right move between the tabs, as in a tab list.
+      tb[i].addEventListener("keydown", function (e) {
+        var step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0, n;
+        if (!step) { return; }
+        e.preventDefault();
+        n = tb[(Array.prototype.indexOf.call(tb, this) + step + tb.length) % tb.length];
+        n.focus(); n.click();
       });
     }
   })();
@@ -835,18 +1029,20 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     var BASE = "http://<TV-IP>:8099/plugins/notification-center/api/";
 
     var SRC = {}, HOOKS = {};
+    function pick(btn) { var all = btn.parentNode.parentNode.querySelectorAll(".rl"), i; for (i = 0; i < all.length; i++) { all[i].setAttribute("aria-pressed", all[i] === btn); } }
     function loadSources() {
       return api("profiles").then(function (d) {
         SRC = d.profiles;
         var names = Object.keys(SRC);
         $("srclist").innerHTML = names.length ? names.map(function (n) {
           var p = SRC[n];
-          return '<li class="rl" data-n="' + esc(n) + '"><b>' + esc(n) + "</b><small>" + esc([p.enabled ? "" : tr("off"), p.icon, p.level, p.mode, p.duration ? p.duration + " s" : "", p.rate ? p.rate + "/min" : "", p.sound ? "\u266A " + p.sound : "", p.hasKey ? tr("haskey") : ""].filter(Boolean).join(" · ")) + "</small></li>";
-        }).join("") : '<li class="empty">' + esc(tr("none")) + "</li>";
+          return '<li><button type="button" class="rl" aria-pressed="false" data-n="' + esc(n) + '"><b>' + esc(n) + "</b><small>" + esc([p.enabled ? "" : tr("off"), p.icon, p.level, p.mode, p.duration ? p.duration + " s" : "", p.rate ? p.rate + "/min" : "", p.sound ? "\u266A " + p.sound : "", p.hasKey ? tr("haskey") : ""].filter(Boolean).join(" · ")) + "</small></button></li>";
+        }).join("") : '<li class="empty">' + esc(tr("no_src")) + "</li>";
         var li = $("srclist").getElementsByClassName("rl"), i;
         for (i = 0; i < li.length; i++) {
           li[i].addEventListener("click", function () {
             var n = this.getAttribute("data-n"), p = SRC[n];
+            pick(this);
             $("s_name").value = n; $("s_icon").value = p.icon; $("s_level").value = p.level; $("s_mode").value = p.mode; $("s_theme").value = p.theme || ""; $("s_priority").value = p.priority || "";
             $("s_dur").value = p.duration || ""; $("s_rate").value = p.rate || ""; $("s_sound").value = p.sound || ""; $("s_vol").value = p.volume || ""; $("s_on").checked = p.enabled; $("srckey").hidden = true;
           });
@@ -868,19 +1064,34 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
       act(this, api("profiles", { source: srcName(), key: "" }).then(function () { $("srckey").hidden = true; note("srcmsg", tr("saved"), "ok"); return loadSources(); }, fail("srcmsg")));
     });
     $("s_del").addEventListener("click", function () {
-      act(this, api("profiles", { source: srcName(), delete: true }).then(function () { note("srcmsg", tr("deleted"), "ok"); $("s_name").value = ""; return loadSources(); }, fail("srcmsg")));
+      var btn = this, n = srcName();
+      if (!n) { note("srcmsg", tr("needname"), "err"); return; }
+      confirmHere(btn, n, function () { act(btn, api("profiles", { source: n, delete: true }).then(function () { note("srcmsg", tr("deleted"), "ok"); $("s_name").value = ""; return loadSources(); }, fail("srcmsg"))); });
     });
 
+    function quietState() { ["q_from", "q_to", "q_allow"].forEach(function (id) { $(id).disabled = !$("q_on").checked; }); }
+    $("q_on").addEventListener("change", quietState);
     function loadSettings() {
       return api("settings").then(function (d) {
         var s = d.settings;
         $("q_on").checked = s.quiet.enabled; $("q_from").value = s.quiet.from; $("q_to").value = s.quiet.to; $("q_allow").value = s.quiet.allow;
-        $("g_secs").value = s.groupSeconds; $("g_strict").checked = s.strict;
+        $("g_secs").value = s.groupSeconds; $("g_strict").checked = s.strict; quietState();
       }).catch(function (e) { note("qmsg", e.message, "err"); });
     }
     $("q_save").addEventListener("click", function () {
-      act(this, api("settings", { quiet: { enabled: $("q_on").checked, from: $("q_from").value, to: $("q_to").value, allow: $("q_allow").value }, groupSeconds: num("g_secs"), strict: $("g_strict").checked })
+      act(this, api("settings", { quiet: { enabled: $("q_on").checked, from: $("q_from").value, to: $("q_to").value, allow: $("q_allow").value } })
         .then(function (r) { note("qmsg", tr("saved"), "ok"); $("q_from").value = r.settings.quiet.from; $("q_to").value = r.settings.quiet.to; }, fail("qmsg")));
+    });
+
+    $("r_save").addEventListener("click", function () {
+      act(this, api("settings", { groupSeconds: num("g_secs"), strict: $("g_strict").checked }).then(function () { note("rmsg", tr("saved"), "ok"); }, fail("rmsg")));
+    });
+    $("cp_reset").addEventListener("click", function () {
+      var btn = this;
+      confirmHere(btn, "", function () {
+        act(btn, api("settings", { quiet: { enabled: false, from: "22:00", to: "07:00", allow: "alert" }, groupSeconds: 60, strict: false, soundVolume: 100, overlayOpacity: 88, oneSound: "", bannerAsOverlay: false, soundDelayMs: 3000 })
+          .then(function () { note("cp_msg", tr("reset_done"), "ok"); setTimeout(function () { location.reload(); }, 1500); }, fail("cp_msg")));
+      }, tr("q_reset"), tr("b_reset"));
     });
 
     function loadHooks() {
@@ -888,12 +1099,13 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
         HOOKS = d.hooks;
         var names = Object.keys(HOOKS);
         $("hooklist").innerHTML = names.length ? names.map(function (n) {
-          return '<li class="rl" data-n="' + esc(n) + '"><b>' + esc(n) + "</b><small>" + esc(HOOKS[n].message) + "</small></li>";
-        }).join("") : '<li class="empty">' + esc(tr("none")) + "</li>";
+          return '<li><button type="button" class="rl" aria-pressed="false" data-n="' + esc(n) + '"><b>' + esc(n) + "</b><small>" + esc(HOOKS[n].message) + "</small></button></li>";
+        }).join("") : '<li class="empty">' + esc(tr("no_hook")) + "</li>";
         var li = $("hooklist").getElementsByClassName("rl"), i;
         for (i = 0; i < li.length; i++) {
           li[i].addEventListener("click", function () {
             var n = this.getAttribute("data-n"), h = HOOKS[n];
+            pick(this);
             $("h_name").value = n; $("h_icon").value = h.icon; $("h_ttl").value = h.title; $("h_msg").value = h.message; $("h_level").value = h.level; $("h_src").value = h.source; $("h_sound").value = h.sound || "";
             $("hurl").hidden = false; $("hurl").textContent = tr("hookurl") + "\n" + BASE + "hook/" + n;
           });
@@ -906,7 +1118,9 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
         .then(function (r) { note("hmsg", tr("saved"), "ok"); $("hurl").hidden = false; $("hurl").textContent = tr("hookurl") + "\n" + BASE + r.url; return loadHooks(); }, fail("hmsg")));
     });
     $("h_del").addEventListener("click", function () {
-      act(this, api("hooks", { name: hookName(), delete: true }).then(function () { note("hmsg", tr("deleted"), "ok"); $("hurl").hidden = true; $("h_name").value = ""; return loadHooks(); }, fail("hmsg")));
+      var btn = this, n = hookName();
+      if (!n) { note("hmsg", tr("needname"), "err"); return; }
+      confirmHere(btn, n, function () { act(btn, api("hooks", { name: n, delete: true }).then(function () { note("hmsg", tr("deleted"), "ok"); $("hurl").hidden = true; $("h_name").value = ""; return loadHooks(); }, fail("hmsg"))); });
     });
     loadSources(); loadSettings(); loadHooks();
     // The two lists are drawn when they load: draw them again when the language changes.
@@ -918,10 +1132,10 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
   // forms and the Testing tab.
   (function () {
     var X = {
-      en: { test_tab: "Try it", tech_tab: "Technical", t_show: "Try each way to show a message", t_show_note: "Each button sends a real test notification to the TV.", t_sound: "Sounds", f_mvol: "Sound volume (%)", f_delay: "The sound starts this long after the notification is sent (ms)", f_delay_note: "The banner appears a few seconds after the request. Press the button \"Send a notification with this sound\" below and move this slider until the sound and the banner arrive together.", t_goodie: "Goodie", t_goodie_note: "About 10 seconds of a well-known tune, played only with the notification sounds (you recognise it by the rhythm).", t_stop: "Stop", f_sound: "Sound", f_vol: "Volume (%)", no_sound: "No sound",
+      en: { test_tab: "Try it", tech_tab: "System", t_show: "Try each way to show a message", t_show_note: "Each button sends a real test notification to the TV.", t_sound: "Sounds", f_mvol: "Sound volume (%)", f_delay: "The sound starts this long after the notification is sent (ms)", f_delay_note: "The banner appears a few seconds after the request. Press the button \"Send a notification with this sound\" below and move this slider until the sound and the banner arrive together.", t_goodie: "Goodie", t_goodie_note: "About 10 seconds of a well-known tune, played only with the notification sounds (you recognise it by the rhythm).", t_stop: "Stop", f_sound: "Sound", f_vol: "Volume (%)", no_sound: "No sound",
         t_send_sound: "Send a notification with this sound", t_pick: "Tapping a sound plays it. Then press Send to try it in a notification.", t_missing: "This Shard cannot play sounds (the exec permission was not granted).",
         t_ready: "Sound Shard found.", t_sent: "Sent", t_none: "Pick a sound first" },
-      pt: { test_tab: "Experimentar", tech_tab: "T\u00E9cnico", t_show: "Experimente cada forma de mostrar uma mensagem", t_show_note: "Cada botão envia uma notificação de teste real para a TV.", t_sound: "Sons", f_mvol: "Volume do som (%)", f_delay: "O som começa este tempo depois de a notificação ser enviada (ms)", f_delay_note: "O banner aparece alguns segundos depois do pedido. Carregue no botão \"Enviar uma notificação com este som\" e mexa neste controlo até o som e o banner chegarem juntos.", t_goodie: "Surpresa", t_goodie_note: "Cerca de 10 segundos de uma música conhecida, tocada só com os sons de notificação (reconhece-se pelo ritmo).", t_stop: "Parar", f_sound: "Som", f_vol: "Volume (%)", no_sound: "Sem som",
+      pt: { test_tab: "Experimentar", tech_tab: "Sistema", t_show: "Experimente cada forma de mostrar uma mensagem", t_show_note: "Cada botão envia uma notificação de teste real para a TV.", t_sound: "Sons", f_mvol: "Volume do som (%)", f_delay: "O som começa este tempo depois de a notificação ser enviada (ms)", f_delay_note: "O banner aparece alguns segundos depois do pedido. Carregue no botão \"Enviar uma notificação com este som\" e mexa neste controlo até o som e o banner chegarem juntos.", t_goodie: "Surpresa", t_goodie_note: "Cerca de 10 segundos de uma música conhecida, tocada só com os sons de notificação (reconhece-se pelo ritmo).", t_stop: "Parar", f_sound: "Som", f_vol: "Volume (%)", no_sound: "Sem som",
         t_send_sound: "Enviar uma notificação com este som", t_pick: "Escolha um som e carregue em Enviar. Tocar num som também o reproduz.", t_missing: "Este Shard não pode tocar sons (a permissão exec não foi concedida).",
         t_ready: "Shard de som encontrado.", t_sent: "Enviado", t_none: "Escolha primeiro um som" }
     }, k, names = [], installed = null, chosen = "";
@@ -932,7 +1146,8 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     }
     function paintSounds() {
       ["sound", "s_sound", "h_sound"].forEach(function (id) { var cur = $(id).value; $(id).innerHTML = options(cur); });
-      $("tsounds").innerHTML = names.map(function (n) { return '<button type="button" class="ghost' + (n === chosen ? " on" : "") + '" data-snd="' + esc(n) + '">' + esc(n) + "</button>"; }).join("");
+      $("tsounds").innerHTML = names.map(function (n) { return '<button type="button" class="ghost' + (n === chosen ? " on" : "") + '" aria-pressed="' + (n === chosen) + '" data-snd="' + esc(n) + '">' + esc(n) + "</button>"; }).join("");
+      paintOne();
       $("tsoundnote").textContent = installed === false ? tr("t_missing") : (installed ? tr("t_pick") : "");
       $("tsoundnote").className = "msg" + (installed === false ? " err" : "");
       $("clist").innerHTML = custom.map(function (n) { return '<button type="button" class="ghost" data-del="' + esc(n) + '">' + "\u2715 " + esc(n) + "</button>"; }).join("");
@@ -940,12 +1155,7 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
       for (k = 0; k < d2.length; k++) {
         d2[k].addEventListener("click", function () {
           var btn = this, nm = btn.getAttribute("data-del");
-          if (btn.getAttribute("data-armed") !== "1") {
-            btn.setAttribute("data-armed", "1"); btn.textContent = tr("t_sure") + " " + nm;
-            setTimeout(function () { btn.setAttribute("data-armed", ""); btn.textContent = "\u2715 " + nm; }, 4000);
-            return;
-          }
-          act(btn, api("sound-delete", { name: nm }).then(function () { return loadSounds(); }));
+          confirmHere(btn, nm, function () { act(btn, api("sound-delete", { name: nm }).then(function () { return loadSounds(); })); });
         });
       }
       var b = $("tsounds").getElementsByTagName("button"), i;
@@ -956,7 +1166,18 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
         });
       }
     }
-    var songs = [], custom = [];
+    var songs = [], custom = [], one = "";
+    function paintOne() {
+      $("tone").innerHTML = '<option value="">' + esc(tr("one_none")) + "</option>" + names.map(function (n) { return '<option value="' + esc(n) + '">' + esc(n) + "</option>"; }).join("");
+      $("tone").value = one;
+    }
+    function failed(id) { return function (e) { $(id).textContent = e.message; $(id).className = "msg err"; }; }
+    $("tone").addEventListener("change", function () { one = this.value; api("settings", { oneSound: one }).then(saved, failed("tsmsg")); });
+    $("tbao").addEventListener("change", function () { api("settings", { bannerAsOverlay: this.checked }).then(saved, failed("tnmsg")); });
+    $("ttest").addEventListener("click", function () {
+      act(this, api("notify", { title: tr("title"), message: tr("ex_simple_m"), mode: "banner", duration: 8, group: false })
+        .then(function () { $("tnmsg").textContent = tr("sent_ok"); $("tnmsg").className = "msg ok"; }, function (e) { failed("tnmsg")(e); throw e; }));
+    });
     function paintSongs() {
       $("tsongs").innerHTML = songs.map(function (s) { return '<button type="button" class="ghost" data-song="' + esc(s.name) + '">♪ ' + esc(s.title) + "</button>"; }).join("");
       var b = $("tsongs").getElementsByTagName("button"), i;
@@ -969,22 +1190,23 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     }
     // The volume and the timing are Shard settings (POST settings). The two volume sliders (send form and Testing tab) show the same value.
     function showVolume(v) { ["mvol", "tmvol"].forEach(function (id) { $(id).value = v; }); $("mvolv").textContent = v + "%"; $("tmvolv").textContent = v + "%"; }
+    function saved() { $("tsmsg").textContent = tr("saved"); $("tsmsg").className = "msg ok"; }
     function loadSounds() {
       return api("sounds").then(function (d) {
         names = d.sounds; custom = d.custom || []; installed = d.available; songs = d.songs || [];
-        showVolume(d.volume); api("settings").then(function (s) { overlayOp = s.settings.overlayOpacity; $("tovop").value = overlayOp; $("tovopv").textContent = overlayOp + "%"; preview(); }).catch(function () { /* keep */ }); $("tdelay").value = d.delayMs; $("tdelayv").textContent = d.delayMs + " ms";
+        showVolume(d.volume); api("settings").then(function (s) { overlayOp = s.settings.overlayOpacity; $("tbao").checked = s.settings.bannerAsOverlay === true; one = s.settings.oneSound || ""; paintOne(); $("tovop").value = overlayOp; $("tovopv").textContent = overlayOp + "%"; preview(); }).catch(function () { /* keep */ }); $("tdelay").value = d.delayMs; $("tdelayv").textContent = d.delayMs + " ms";
         paintSounds(); paintSongs();
       }).catch(function () { /* keep the lists empty */ });
     }
     $("tvol").addEventListener("input", function () { $("tvolv").textContent = this.value + "%"; });
     ["mvol", "tmvol"].forEach(function (id) {
       $(id).addEventListener("input", function () { showVolume(this.value); });
-      $(id).addEventListener("change", function () { api("settings", { soundVolume: parseInt(this.value, 10) }).then(function (r) { showVolume(r.settings.soundVolume); }).catch(function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; }); });
+      $(id).addEventListener("change", function () { api("settings", { soundVolume: parseInt(this.value, 10) }).then(function (r) { showVolume(r.settings.soundVolume); saved(); }).catch(function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; }); });
     });
     $("tovop").addEventListener("input", function () { overlayOp = parseInt(this.value, 10); $("tovopv").textContent = this.value + "%"; preview(); });
-    $("tovop").addEventListener("change", function () { api("settings", { overlayOpacity: parseInt(this.value, 10) }).catch(function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; }); });
+    $("tovop").addEventListener("change", function () { api("settings", { overlayOpacity: parseInt(this.value, 10) }).then(saved).catch(function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; }); });
     $("tdelay").addEventListener("input", function () { $("tdelayv").textContent = this.value + " ms"; });
-    $("tdelay").addEventListener("change", function () { api("settings", { soundDelayMs: parseInt(this.value, 10) }).catch(function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; }); });
+    $("tdelay").addEventListener("change", function () { api("settings", { soundDelayMs: parseInt(this.value, 10) }).then(saved).catch(function (e) { $("tsmsg").textContent = e.message; $("tsmsg").className = "msg err"; }); });
     $("cup").addEventListener("click", function () {
       var f = $("cfile").files && $("cfile").files[0], n = $("cname").value.trim().toLowerCase();
       if (!f || !/^[a-z0-9][a-z0-9-]{0,23}$/.test(n)) { $("tsmsg").textContent = tr("t_cbad"); $("tsmsg").className = "msg err"; return; }
@@ -1017,45 +1239,63 @@ table.api th { color: var(--dim); font-size: 11px; text-transform: uppercase; le
     T.en.th_default = "Default"; T.pt.th_default = "Por omiss\u00E3o"; T.en.th_meaning = "Meaning"; T.pt.th_meaning = "Significado";
     T.pt.pick_title = "Escolher um \u00EDcone"; T.pt.close = "Fechar"; T.pt.ph_auto = "\u00CDcone autom\u00E1tico:";
     T.en.cp_title = "Copy this setup to another TV"; T.pt.cp_title = "Copiar esta configura\u00E7\u00E3o para outra TV";
-    T.en.cp_note = "Save your settings, senders, webhooks and, if you want, your sounds in one file, then load that file on another TV that has the Notification Center."; T.pt.cp_note = "Guarde as defini\u00E7\u00F5es, os emissores, os webhooks e, se quiser, os seus sons num ficheiro, e carregue esse ficheiro noutra TV que tenha o Centro de Notifica\u00E7\u00F5es.";
+    T.en.cp_note = "Get your settings, senders, webhooks and, if you want, your sounds as one text, then load it on another TV that has the Notification Center."; T.pt.cp_note = "Obtenha as defini\u00E7\u00F5es, os emissores, os webhooks e, se quiser, os seus sons num texto, e carregue-o noutra TV que tenha o Centro de Notifica\u00E7\u00F5es.";
     T.en.cp_sounds = "Include my sounds (the file gets bigger)"; T.pt.cp_sounds = "Incluir os meus sons (o ficheiro fica maior)";
     T.en.cp_keys = "Include the keys of the senders (keep the file private)"; T.pt.cp_keys = "Incluir as chaves dos emissores (guarde o ficheiro em privado)";
-    T.en.cp_save = "Download the setup file"; T.pt.cp_save = "Descarregar o ficheiro da configura\u00E7\u00E3o";
+    T.en.cp_save = "Show the setup"; T.pt.cp_save = "Mostrar a configura\u00E7\u00E3o";
+    T.en.cp_copy = "Copy the text"; T.pt.cp_copy = "Copiar o texto";
+    T.en.cp_copied = "Copied. Save it as a .json file or paste it on the other TV."; T.pt.cp_copied = "Copiado. Guarde num ficheiro .json ou cole na outra TV.";
+    T.en.cp_manual = "The text is selected: copy it with Ctrl+C or the Copy menu."; T.pt.cp_manual = "O texto est\u00E1 selecionado: copie com Ctrl+C ou pelo menu Copiar.";
+    T.en.cp_first = "Press Show the setup first."; T.pt.cp_first = "Carregue primeiro em Mostrar a configura\u00E7\u00E3o.";
+    T.en.cp_dl = "To download it as a file, open this address in a new browser tab: "; T.pt.cp_dl = "Para descarregar como ficheiro, abra este endere\u00E7o num novo separador do browser: ";
+    T.en.ph_cpin = "...or paste the setup text here"; T.pt.ph_cpin = "...ou cole aqui o texto da configura\u00E7\u00E3o";
     T.en.cp_load = "Load a setup file"; T.pt.cp_load = "Carregar um ficheiro de configura\u00E7\u00E3o";
     T.en.cp_up = "Load it"; T.pt.cp_up = "Carregar";
-    T.en.cp_none = "Choose a setup file first."; T.pt.cp_none = "Escolha primeiro um ficheiro de configura\u00E7\u00E3o.";
+    T.en.cp_none = "Choose a setup file or paste the text first."; T.pt.cp_none = "Escolha primeiro um ficheiro ou cole o texto.";
     T.en.cp_done = "Loaded: {s} sources, {w} webhooks, {n} sounds."; T.pt.cp_done = "Carregado: {s} emissores, {w} webhooks, {n} sons.";
     T.en.cp_skip = " Not loaded: "; T.pt.cp_skip = " N\u00E3o carregado: ";
+    function cpSay(text, kind) { $("cp_msg").textContent = text; $("cp_msg").className = "msg " + kind; }
     $("cp_save").addEventListener("click", function () {
       var url = "export?sounds=" + ($("cp_sounds").checked ? "1" : "0") + "&keys=" + ($("cp_keys").checked ? "1" : "0");
-      act(this, fetch(url).then(function (r) { if (!r.ok) { throw new Error("error " + r.status); } return r.blob(); }).then(function (b) {
-        var a = document.createElement("a");
-        a.href = URL.createObjectURL(b); a.download = "notification-center-setup.json";
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-      }).catch(function (e) { $("cp_msg").textContent = e.message; $("cp_msg").className = "msg err"; throw e; }));
+      act(this, fetch(url).then(function (r) { if (!r.ok) { throw new Error("error " + r.status); } return r.text(); }).then(function (text) {
+        $("cp_out").value = text; $("cp_out").style.display = "block"; cpSay("", "");
+        $("cp_url").textContent = tr("cp_dl") + baseUrl() + "/plugins/notification-center/api/" + url;
+      }).catch(function (e) { cpSay(e.message, "err"); throw e; }));
     });
+    $("cp_copy").addEventListener("click", function () {
+      var out = $("cp_out"), done = false;
+      if (!out.value) { cpSay(tr("cp_first"), "err"); return; }
+      out.focus(); out.select();
+      try { done = document.execCommand("copy"); } catch (e) { done = false; }
+      cpSay(tr(done ? "cp_copied" : "cp_manual"), "ok");
+    });
+    function load(body) {
+      return fetch("import", { method: "POST", body: body })
+        .then(function (x) { return x.json().then(function (j) { if (!x.ok) { throw new Error(j.error || "error " + x.status); } return j; }); })
+        .then(function (j) {
+          var i = j.imported;
+          cpSay(tr("cp_done").replace("{s}", i.sources).replace("{w}", i.webhooks).replace("{n}", i.sounds) + (j.skipped.length ? tr("cp_skip") + j.skipped.join(", ") : ""), j.skipped.length ? "err" : "ok");
+          $("cp_file").value = ""; $("cp_in").value = "";
+          setTimeout(function () { location.reload(); }, j.skipped.length ? 6000 : 1800);
+        }).catch(function (e) { cpSay(e.message, "err"); throw e; });
+    }
     $("cp_up").addEventListener("click", function () {
-      var f = $("cp_file").files && $("cp_file").files[0];
-      if (!f) { $("cp_msg").textContent = tr("cp_none"); $("cp_msg").className = "msg err"; return; }
-      act(this, new Promise(function (ok, no) {
+      var f = $("cp_file").files && $("cp_file").files[0], pasted = $("cp_in").value.trim();
+      if (!f && !pasted) { cpSay(tr("cp_none"), "err"); return; }
+      act(this, pasted ? load(pasted) : new Promise(function (ok, no) {
         var r = new FileReader();
-        r.onload = function () {
-          fetch("import", { method: "POST", body: r.result })
-            .then(function (x) { return x.json().then(function (j) { if (!x.ok) { throw new Error(j.error || "error " + x.status); } return j; }); })
-            .then(function (j) {
-              var i = j.imported;
-              $("cp_msg").textContent = tr("cp_done").replace("{s}", i.sources).replace("{w}", i.webhooks).replace("{n}", i.sounds) + (j.skipped.length ? tr("cp_skip") + j.skipped.join(", ") : "");
-              $("cp_msg").className = "msg " + (j.skipped.length ? "err" : "ok"); $("cp_file").value = "";
-              setTimeout(function () { location.reload(); }, j.skipped.length ? 6000 : 1800);
-            }).then(ok, function (e) { $("cp_msg").textContent = e.message; $("cp_msg").className = "msg err"; no(e); });
-        };
+        r.onload = function () { load(r.result).then(ok, no); };
         r.onerror = no;
         r.readAsArrayBuffer(f);
       }));
     });
   })();
 
+  [["set_notif", "Notification", "Aviso"], ["q_title", "Quiet hours", "Horas de sil\u00EAncio"], ["q_on", "Hold notifications in these hours", "Reter avisos nestas horas"], ["cp_title", "Backup", "C\u00F3pia"],
+    ["tbao", "Show banners as a bottom toast", "Mostrar os banners como barra em baixo"], ["b_test", "Test", "Testar"], ["f_one", "One sound for everything", "Um som para tudo"], ["one_none", "Each keeps its own", "Cada um fica com o seu"],
+    ["r_title", "Repeats and unknown senders", "Repeti\u00E7\u00F5es e emissores desconhecidos"], ["b_reset", "Reset settings", "Repor defini\u00E7\u00F5es"], ["reset_done", "Settings reset", "Defini\u00E7\u00F5es repostas"],
+    ["q_reset", "Reset all settings to their defaults? Senders, webhooks, sounds and wallpapers are kept.", "Repor todas as defini\u00E7\u00F5es? Os emissores, webhooks, sons e wallpapers ficam."]
+  ].forEach(function (w) { T.en[w[0]] = w[1]; T.pt[w[0]] = w[2]; });
   applyLang();
   loadStatus(); loadApi();
   api("lang").then(function (d) { if (T[d.lang] && d.lang !== lang) { lang = d.lang; applyLang(); } }).catch(function () { /* keep English */ });

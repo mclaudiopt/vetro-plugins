@@ -37,6 +37,8 @@ var MAX_TITLE = 40, MAX_MESSAGE = 200, MAX_QUEUE = 5, MAX_RECENT = 20, MAX_BODY 
 var DEFAULT_SECONDS = 30, MIN_SECONDS = 5, MAX_SECONDS = 300, MIN_RELAUNCH_MS = 2000, APP_ACTIVE_MS = 3500;
 // The banner service reads the queue from this file, so it needs no network and no Vetro key (it still works with pairing on).
 var QUEUE_FILE = '/tmp/notification-center-queue.json';
+var REPORT_FILE = '/tmp/notification-center-report.json', MAX_REPORTS = 8;   // diagnosis of the banner service
+var REPORT_TEXT = ['stage', 'node', 'fetch', 'webapis', 'postFunction', 'source', 'fileError', 'netError', 'error', 'returned', 'id'];
 var DEFAULT_APP = 'NotifCtr01.NotifCenter';   // the companion app (screen: full-screen card, native banner)
 var SERVICE_APP = 'NotifCtr01.Svc';           // its background service (native banner over the running app, no app switch)
 var LEVELS = { info: 1, ok: 1, warn: 1, alert: 1 };
@@ -61,6 +63,8 @@ module.exports = function (ctx) {
         if (typeof ctx.sound.seenFile === 'string') { seenFile = ctx.sound.seenFile; }
         if (typeof ctx.sound.songScale === 'number') { songScale = ctx.sound.songScale; }
     }
+    var reportFile = typeof ctx.reportFile === 'string' ? ctx.reportFile : REPORT_FILE;   // only a test changes this
+    var serviceReports = [], serviceLaunch = null;   // what the banner service said, and what Vetro answered when asked to start it
     var queue = [];      // active notifications (memory only)
     var recent = [];     // last ones sent, for the page; kept in ctx.config so they survive a restart or an update
     try { var saved = (ctx.config.get() || {}).recent; if (Array.isArray(saved)) { recent = saved.slice(0, MAX_RECENT); } } catch (e) { recent = []; }
@@ -164,8 +168,12 @@ module.exports = function (ctx) {
             var rq = http.request({
                 host: VHOST, port: VPORT, path: '/apps/launch', method: 'POST', timeout: 5000,
                 headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
-            }, function (r) { r.resume(); });
-            rq.on('error', function () { /* Vetro busy or app not installed */ });
+            }, function (r) {
+                var answer = '';
+                r.on('data', function (d) { if (answer.length < 300) { answer += d; } });
+                r.on('end', function () { if (service) { serviceLaunch = { at: now, status: r.statusCode, body: clean(answer, 200) }; } });
+            });
+            rq.on('error', function (e) { if (service) { serviceLaunch = { at: now, error: clean(e && e.message, 200) }; } /* Vetro busy or app not installed */ });
             rq.setTimeout(5000);   // the timeout option alone is ignored before Node 6.8
             rq.on('timeout', function () { rq.destroy(); });
             rq.write(body);
@@ -385,12 +393,13 @@ module.exports = function (ctx) {
         try { fs.writeFileSync(tmp, data, { mode: 420, flag: 'wx' }); fs.renameSync(tmp, file); return true; } catch (e) { try { fs.unlinkSync(tmp); } catch (e2) { /* nothing to remove */ } return false; }
     }
     function overlayInstall() {
-        var dir = overlayDir(), dll = dir + '/ncoverlay.dll', rc = dir + '/ncoverlay.runtimeconfig.json', buf, size = -1;
+        var dir = overlayDir(), dll = dir + '/ncoverlay.dll', rc = dir + '/ncoverlay.runtimeconfig.json', buf, size = -1, same = false;
         try {
             try { fs.mkdirSync(dir); } catch (e) { /* exists */ }
             buf = require('zlib').gunzipSync(new Buffer(fs.readFileSync(path.join(__dirname, 'overlay', 'ncoverlay.dll.b64'), 'ascii'), 'base64'));
-            try { size = fs.statSync(dll).size; } catch (e) { size = -1; }
-            if (size !== buf.length && !putFile(dll, buf)) { return ''; }
+            // The whole content is compared: .NET files grow in steps of 512 bytes, so a new helper can have the size of the old one.
+            try { same = fs.readFileSync(dll).toString('base64') === buf.toString('base64'); } catch (e) { same = false; }
+            if (!same && !putFile(dll, buf)) { return ''; }
             try { size = fs.statSync(rc).size; } catch (e) { size = -1; }
             if (size !== OVERLAY_RUNTIMECONFIG.length && !putFile(rc, OVERLAY_RUNTIMECONFIG)) { return ''; }
             return dir;
@@ -423,10 +432,64 @@ module.exports = function (ctx) {
         return 'requested';
     }
 
+    // The apps of the TV, for the suggestions of the action button: the panel may only call routes of this Shard.
+    function handleApps(res) {
+        var done = false;
+        function reply(list) { if (!done) { done = true; sendJson(res, 200, { apps: list }); } }
+        try {
+            var rq = http.get({ host: VHOST, port: VPORT, path: '/apps', timeout: 5000 }, function (r) {
+                var s = '';
+                r.setEncoding('utf8');
+                r.on('data', function (d) { s += d; if (s.length > 3000000) { r.destroy(); reply([]); } });
+                r.on('end', function () {
+                    var out = [], i;
+                    try {
+                        var j = JSON.parse(s), list = Array.isArray(j) ? j : (j.apps || []);
+                        for (i = 0; i < list.length && out.length < 250; i++) {
+                            if (list[i] && list[i].show === true && /^[A-Za-z0-9._-]{1,64}$/.test(str(list[i].appId))) { out.push({ appId: str(list[i].appId), name: clean(list[i].name, 60) }); }
+                        }
+                    } catch (e) { out = []; }
+                    reply(out);
+                });
+            });
+            rq.on('error', function () { reply([]); });
+            rq.setTimeout(5000);
+            rq.on('timeout', function () { rq.destroy(); reply([]); });
+        } catch (e) { reply([]); }
+    }
+
     // Installation status for the panel: is the companion app (and its service) installed, is Vetro pairing on, which Shard version.
+    // Only known fields are kept, as short plain text or small numbers.
+    function cleanReport(v) {
+        if (!rules.isObj(v) || !str(v.stage)) { return null; }
+        var out = {};
+        REPORT_TEXT.forEach(function (k) { if (has(v, k)) { out[k] = clean(v[k], 200); } });
+        ['count', 'fresh'].forEach(function (k) { if (has(v, k) && num(v[k]) >= 0) { out[k] = num(v[k]); } });
+        return out;
+    }
+    function handleServiceReport(req, res) {
+        readBodyG(req, res, function (raw) {
+            var r;
+            try { r = cleanReport(JSON.parse(raw)); } catch (e) { r = null; }
+            if (!r) { return sendJson(res, 400, { error: 'a JSON object with a stage' }); }
+            r.at = Date.now();
+            serviceReports.push(r);
+            if (serviceReports.length > MAX_REPORTS) { serviceReports.shift(); }
+            sendJson(res, 200, { ok: true });
+        });
+    }
+    // The copy the service leaves in a file, for a TV where it cannot reach the Shard over the network.
+    function fileReport() {
+        try {
+            if (fs.statSync(reportFile).size > 20000) { return null; }
+            var d = JSON.parse(fs.readFileSync(reportFile, 'utf8'));
+            return { at: num(d.at) || 0, reports: (Array.isArray(d.reports) ? d.reports.slice(-MAX_REPORTS) : []).map(cleanReport).filter(Boolean) };
+        } catch (e) { return null; }
+    }
     function statusInfo(cb) {
         var out = { version: '', app: false, appVersion: '', service: false, pairing: 'unknown', handoff: false, sound: soundAvailable(), overlay: overlayAvailable(), screen: { ntjsAgoS: ageS(appSeen.ntjs), pollAgoS: ageS(appSeen.poll), imgAgoS: ageS(appSeen.img), from: appSeen.from, open: appPoll > 0 && Date.now() - appPoll < APP_ACTIVE_MS } }, left = 2;
         try { out.handoff = fs.existsSync(queueFile); } catch (e) { /* unknown */ }
+        out.serviceDiag = { launch: serviceLaunch, reports: serviceReports, file: fileReport() };
         try { out.version = require('./manifest.json').version; } catch (e) { /* manifest not readable */ }
         function once() { var d = false; return function () { if (!d) { d = true; left -= 1; if (!left) { cb(out); } } }; }
         var d1 = once(), d2 = once();
@@ -510,7 +573,7 @@ module.exports = function (ctx) {
                 message: { type: 'string', required: true, max: MAX_MESSAGE, note: 'The text of the notification.' },
                 title: { type: 'string', max: MAX_TITLE },
                 level: { type: 'string', enum: Object.keys(LEVELS), default: 'info', note: 'Colours the card and the panel; the native banner shows the level emoji.' },
-                mode: { type: 'string', enum: Object.keys(MODES), default: 'banner', note: 'banner = native Samsung banner over the running app (no app switch); full = full-screen card; both = card and banner; overlay = the bottom toast: a bar near the bottom of the screen drawn over the running picture by the Shard\'s own helper (never interrupts it; `level` sets the colour of its stripe, a PNG `image` becomes its icon).' },
+                mode: { type: 'string', enum: Object.keys(MODES), default: 'banner', note: 'banner = native Samsung banner over the running app (no app switch); full = full-screen card; both = card and banner; overlay = the bottom toast: a bar near the bottom of the screen drawn over the running picture by the Shard\'s own helper (never interrupts it; `level` sets the colour of its stripe, a PNG `image` becomes its icon). With the setting bannerAsOverlay on, a banner request (or one without mode) is shown as overlay; both is not changed.' },
                 duration: { type: 'integer', min: MIN_DURATION, max: MAX_DURATION, default: DEFAULT_DURATION, note: 'Seconds on screen.' },
                 icon: { type: 'string', max: MAX_ICON, note: 'One emoji (or an emoji sequence) in front of the title; default by level. Cut at whole emoji, never in the middle of one.' },
                 image: { type: 'url', note: 'http/https picture under the message on the full-screen card, or the icon of the overlay bar (PNG). The Shard fetches it.' },
@@ -532,13 +595,14 @@ module.exports = function (ctx) {
                 { method: 'GET', path: 'notifications', summary: 'The active queue (used by the app and its service); add ?js=1 for the script form.', returns: '{lang, notifications:[...]}' },
                 { method: 'GET', path: 'recent', summary: 'The last notifications sent.', returns: '{recent:[...]}' },
                 { method: 'GET', path: 'img?id=<id>[&kind=wallpaper][&info=1]', summary: 'The picture of a queued notification, fetched and served by the Shard; info=1 returns {ok,type,bytes}.', returns: 'image bytes or JSON' },
-                { method: 'GET', path: 'status', summary: 'Installation status: companion app, its service, Vetro pairing, Shard version.', returns: '{version, app, appVersion, service, pairing, sound, overlay, screen}' },
+                { method: 'GET', path: 'status', summary: 'Installation status: companion app, its service, Vetro pairing, Shard version.', returns: '{version, app, appVersion, service, pairing, sound, overlay, screen, serviceDiag:{launch,reports,file}}' },
+                { method: 'POST', path: 'service-report', summary: 'Used by the banner service to say what happened (started, where it read the queue, whether the banner function exists, its error). The last 8 are in GET status, serviceDiag.', body: '{stage, ...}', returns: '{ok}' },
                 { method: 'GET', path: 'lang', summary: 'Display language (en or pt).', returns: '{lang}' },
                 { method: 'POST', path: 'lang', summary: 'Set the display language.', body: '{lang: "en"|"pt"}', returns: '{lang}' },
                 { method: 'GET', path: 'profiles', summary: 'The sources (profiles): defaults per sender. Keys are never returned, only hasKey.', returns: '{profiles:{<source>:{enabled,icon,level,mode,duration,rate,hasKey}}, max}' },
                 { method: 'POST', path: 'profiles', summary: 'Create, change or delete a source.', body: '{source, icon?, level?, mode?, duration?, rate? (per minute, 0 = no limit), enabled?, key? ("" clears), genKey? (true returns a new key once), delete?}', returns: '{ok, source, profile, key?}' },
-                { method: 'GET', path: 'settings', summary: 'Quiet hours, grouping of repeats and strict mode.', returns: '{settings:{quiet:{enabled,from,to,allow},groupSeconds,strict,soundVolume,soundDelayMs,overlayOpacity}}' },
-                { method: 'POST', path: 'settings', summary: 'Change those settings (send only what changes).', body: '{quiet?:{enabled,from:"22:00",to:"07:00",allow:"alert"|"warn"|"none"}, groupSeconds? (0 = off), strict? (true rejects unknown sources), soundVolume? (10-100 %, the volume of every sound, default 100), soundDelayMs? (0-10000, how long after the request the sound starts, default 3000), overlayOpacity? (20-100 %, how opaque the background of the overlay bar is, default 88)}', returns: '{ok, settings}' },
+                { method: 'GET', path: 'settings', summary: 'Quiet hours, grouping of repeats and strict mode.', returns: '{settings:{quiet:{enabled,from,to,allow},groupSeconds,strict,soundVolume,oneSound,bannerAsOverlay,soundDelayMs,overlayOpacity}}' },
+                { method: 'POST', path: 'settings', summary: 'Change those settings (send only what changes).', body: '{quiet?:{enabled,from:"22:00",to:"07:00",allow:"alert"|"warn"|"none"}, groupSeconds? (0 = off), strict? (true rejects unknown sources), soundVolume? (10-100 %, the volume of every sound, default 100), oneSound? (a sound name: every notification that has a sound plays this one instead; "" = off, the default), bannerAsOverlay? (true: a banner notification, or one without mode, is shown as the overlay bar; both is not changed; default false), soundDelayMs? (0-10000, how long after the request the sound starts, default 3000), overlayOpacity? (20-100 %, how opaque the background of the overlay bar is, default 88)}', returns: '{ok, settings}' },
                 { method: 'GET', path: 'hooks', summary: 'The webhooks (templates that turn any JSON into a notification).', returns: '{hooks, max, base}' },
                 { method: 'POST', path: 'hooks', summary: 'Create, change or delete a webhook.', body: '{name, message (template), title?, level?, icon?, mode?, duration?, source?, delete?}; templates use {{a.b.0.c}} from the posted JSON', returns: '{ok, name, hook, url}' },
                 { method: 'POST', path: 'hook/<name>', summary: 'Send any JSON (up to 64 KB) to a webhook; its templates build the notification. Non-JSON bodies are available as {{text}}.', returns: 'same as notify' },
@@ -548,6 +612,7 @@ module.exports = function (ctx) {
                 { method: 'POST', path: 'action?id=<id>', summary: 'Used by the full-screen card when the button of a notification is pressed: launches the app that notification named in `action` (404 if that notification has no button or is gone, 429 if used less than 2 s ago).', returns: '{ok, app}' },
                 { method: 'GET', path: 'themes', summary: 'The wallpaper themes: the built-in ones (sport, news) and your own (name to picture address).', returns: '{builtin:[...], custom:{name:url}, max}' },
                 { method: 'POST', path: 'themes', summary: 'Add or change one of your own themes, or delete it. Its name is 1-24 characters of a-z, 0-9 and -, not a built-in name; the address is http or https; at most 12. Then send theme:"<name>" (or give a source that default).', body: '{name, url} or {name, delete:true}', returns: '{ok, name, url} or {ok, deleted}' },
+                { method: 'GET', path: 'apps', summary: 'The apps shown on the TV, for the app id of an action button.', returns: '{apps:[{appId,name}]} (empty if Vetro does not answer)' },
                 { method: 'GET', path: 'export[?sounds=1][&keys=1]', summary: 'The setup of this Notification Center as one JSON file (settings, sources, webhooks); sounds=1 adds your own sounds, keys=1 adds the keys of the senders (keep that file private). Load it on another TV with POST import.', returns: 'a JSON file ({format, formatVersion, shard, exportedAt, settings, sources, webhooks, sounds})' },
                 { method: 'POST', path: 'import', summary: 'Load a setup file made by GET export: the settings are replaced, sources and webhooks of the same name are replaced and the others are kept, sounds are added. Everything is checked again; what cannot be used is listed in skipped.', body: 'the file, as it is', returns: '{ok, imported:{settings,sources,webhooks,sounds}, skipped:[...]}' },
                 { method: 'GET', path: 'sounds', summary: 'The sounds a request can choose, whether this Shard can play sounds (exec granted), the volume and timing settings, the timing of the last banner sound (trace) and the result of the last attempt.', returns: '{sounds:[...], songs:[{name,title}], available, volume, delayMs, trace, last}' },
@@ -856,6 +921,9 @@ module.exports = function (ctx) {
             if (secs < dur + 20) { secs = dur + 20; }
             prune();
             seq += 1;
+            // The setting bannerAsOverlay turns a banner (asked for, or the default) into the overlay bar, only when the bar can be drawn. "both" keeps its card.
+            var mode = has(MODES, b.mode) ? b.mode : 'banner';
+            if (mode === 'banner' && settings.bannerAsOverlay && overlayAvailable()) { mode = 'overlay'; }
             var note = {
                 id: seq + '-' + Date.now().toString(36),
                 title: clean(b.title, MAX_TITLE),
@@ -867,10 +935,10 @@ module.exports = function (ctx) {
                 action: cleanAction(b.action),
                 message: message,
                 level: has(LEVELS, b.level) ? b.level : 'info',
-                mode: has(MODES, b.mode) ? b.mode : 'banner',
+                mode: mode,
                 duration: dur,
                 source: source,
-                sound: rules.hasSound(b.sound) ? b.sound : '',
+                sound: !rules.hasSound(b.sound) ? '' : (rules.hasSound(settings.oneSound) ? settings.oneSound : b.sound),
                 volume: soundVolume(b.volume),
                 expires: Date.now() + secs * 1000
             };
@@ -980,11 +1048,13 @@ module.exports = function (ctx) {
             if (sub === 'ui' && req.method === 'GET') { sendFile(res, 'ui.html', 'text/html; charset=utf-8'); return true; }
             if (sub === 'api' && req.method === 'GET') { sendJson(res, 200, describe()); return true; }
             if (sub === 'status' && req.method === 'GET') { statusInfo(function (o) { sendJson(res, 200, o); }); return true; }
+            if (sub === 'service-report' && req.method === 'POST') { handleServiceReport(req, res); return true; }
             if (sub === 'img' && req.method === 'GET') { mark('img', req); serveImage(req, res); return true; }
             if (sub === 'ntfy' && req.method === 'POST') { handleNtfy(req, res); return true; }
             if (sub === 'play' && req.method === 'POST') { handlePlay(req, res); return true; }
             if (sub === 'themes' && (req.method === 'GET' || req.method === 'POST')) { handleThemes(req, res); return true; }
             if (sub === 'action' && req.method === 'POST') { handleAction(req, res); return true; }
+            if (sub === 'apps' && req.method === 'GET') { handleApps(res); return true; }
             if (sub === 'export' && req.method === 'GET') { handleExport(req, res); return true; }
             if (sub === 'import' && req.method === 'POST') { handleImport(req, res); return true; }
             if (sub === 'sound-upload' && req.method === 'POST') { handleSoundUpload(req, res); return true; }

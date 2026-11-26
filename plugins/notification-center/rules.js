@@ -137,6 +137,10 @@ function sanitizeSettings(s, old) {
         strict: has(s, 'strict') ? s.strict === true : old.strict === true,
         soundVolume: has(s, 'soundVolume') && !isNaN(num(s.soundVolume)) ? clampVolume(s.soundVolume) : (has(old, 'soundVolume') ? clampInt(old.soundVolume, 10, 100, 100) : 100),
         overlayOpacity: has(s, 'overlayOpacity') ? clampInt(s.overlayOpacity, 20, 100, has(old, 'overlayOpacity') ? clampInt(old.overlayOpacity, 20, 100, 88) : 88) : (has(old, 'overlayOpacity') ? clampInt(old.overlayOpacity, 20, 100, 88) : 88),
+        // One sound for everything: replaces whatever sound a notification asks for; '' = each keeps its own. Silent ones stay silent.
+        oneSound: has(s, 'oneSound') ? (hasSound(s.oneSound) ? s.oneSound : '') : str(old.oneSound),
+        // For a TV whose native banner does not show: `banner` requests (also the ones without a mode) are drawn as the overlay bar.
+        bannerAsOverlay: has(s, 'bannerAsOverlay') ? s.bannerAsOverlay === true : old.bannerAsOverlay === true,
         soundDelayMs: has(s, 'soundDelayMs') ? clampInt(s.soundDelayMs, 0, 10000, has(old, 'soundDelayMs') ? clampInt(old.soundDelayMs, 0, 10000, 3000) : 3000) : (has(old, 'soundDelayMs') ? clampInt(old.soundDelayMs, 0, 10000, 3000) : 3000)
     };
 }

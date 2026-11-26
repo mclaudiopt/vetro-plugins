@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.26.1
+
+- **Fix:** when the banner service says it could not post a banner, or could not read the queue, the open app screen posts the banner instead of leaving it to nobody; a banner the service did post is still not repeated.
+
 ## 0.26.0
 
 - **Panel:** a sender says what changes on the TV while one of its controls is off; the "New" mark goes away once the sender is opened (`seen.<source>.opened`, `POST profiles` `{source, opened: true}`); Try it has an example for each category (goal, civil protection, weather, news, reminder); Resend in the log also sends the sender (`source`), so its rules apply again, and a sender with a key refuses it; a message sent without a volume is resent at full volume, not at the lowest; on a phone the four ways of showing a message sit in two rows.

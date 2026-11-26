@@ -31,7 +31,7 @@ async function withShard(fn) {
 }
 
 // Runs nt.js on a fake page whose queue is `list`; returns the bodies of the banners it posted.
-function appScreen(list) {
+function appScreen(list, store = {}) {
     const posted = [];
     const el = () => ({style: {setProperty() {}}, childNodes: [], firstChild: null, appendChild(c) { this.firstChild = this.firstChild || c; return c; },
         removeChild() {}, getElementsByTagName: () => [{}], focus() {}});
@@ -42,7 +42,6 @@ function appScreen(list) {
     Notification.permission = 'granted';
     function XMLHttpRequest() {}
     XMLHttpRequest.prototype = {open() {}, send() { this.status = 200; this.responseText = JSON.stringify({lang: 'en', notifications: list}); this.onload(); }};
-    const store = {};
     vm.runInNewContext(ntCode, {window: {Notification}, Notification, XMLHttpRequest, document,
         localStorage: {getItem: k => store[k] || null, setItem: (k, v) => { store[k] = v; }},
         setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, Image: function () {}});
@@ -85,4 +84,42 @@ test('from the Shard to the screen: no second banner while the service reports',
     assert.deepEqual(appScreen(await queue()), ['banner']);
     await call('POST', 'service-report', {stage: 'posted'});
     assert.deepEqual(appScreen(await queue()), []);
+}));
+
+test('a banner the service could not post is left to the app screen, until the service posts again', () => withShard(async ({call, send}) => {
+    const queue = async () => (await call('GET', 'notifications')).json.notifications;
+    const first = (await send('banner')).json.id;
+    await call('POST', 'service-report', {stage: 'post-failed', id: first, error: 'no webapis'});
+    await call('POST', 'service-report', {stage: 'queue'});   // reading the queue does not show that posting works again
+    await send('banner');
+    assert.deepEqual((await queue()).map(n => n.svc), [false, false]);
+    await call('POST', 'service-report', {stage: 'posted', id: 'another'});
+    assert.deepEqual((await queue()).map(n => n.svc), [false, true]);
+}));
+
+test('a banner the service posted is not repeated when a later one fails', () => withShard(async ({call, send}) => {
+    const a = (await send('banner')).json.id, b = (await send('banner')).json.id;
+    await call('POST', 'service-report', {stage: 'posted', id: a});
+    await call('POST', 'service-report', {stage: 'post-failed', id: b});
+    const queue = (await call('GET', 'notifications')).json.notifications;
+    assert.deepEqual(queue.map(n => [n.id, n.svc]), [[a, true], [b, false]]);
+}));
+
+test('a queue the service cannot read leaves the banners to the app until it reads it', () => withShard(async ({call, send, svc}) => {
+    await send('banner');
+    await call('POST', 'service-report', {stage: 'queue-failed'});
+    assert.equal((await svc()).banner, false);
+    await call('POST', 'service-report', {stage: 'queue'});
+    assert.equal((await svc()).banner, true);
+}));
+
+test('an app screen that was already open posts the banner once when the failure arrives later', () => withShard(async ({call, send}) => {
+    await call('POST', 'service-report', {stage: 'start'});
+    const id = (await send('banner')).json.id;
+    const queue = async () => (await call('GET', 'notifications?src=app')).json.notifications;
+    const store = {};
+    assert.deepEqual(appScreen(await queue(), store), []);
+    await call('POST', 'service-report', {stage: 'post-failed', id});
+    assert.deepEqual(appScreen(await queue(), store), ['banner']);
+    assert.deepEqual(appScreen(await queue(), store), []);
 }));

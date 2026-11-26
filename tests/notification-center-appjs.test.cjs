@@ -28,7 +28,7 @@ const NT = '/plugins/notification-center/api/nt.js';
 
 test('the wired address of the TV is tried first, then 127.0.0.1', async () => {
     const r = run({tizen: systeminfo({ETHERNET_NETWORK: '192.168.1.50'})});
-    await wait(250);
+    await wait(1500);   // generous: the test files run side by side
     assert.deepEqual(r.scripts.map(s => s.split('?')[0]), ['http://192.168.1.50:8099' + NT, 'http://127.0.0.1:8099' + NT]);
     assert.equal(r.log[r.log.length - 1], 'Could not load nt.js from the Shard. Is it running?');
 });

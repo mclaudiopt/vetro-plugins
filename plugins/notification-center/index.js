@@ -485,8 +485,24 @@ module.exports = function (ctx) {
     // Installation status for the panel: is the companion app (and its service) installed, is Vetro pairing on, which Shard version.
     // Only known fields are kept, as short plain text or small numbers.
     // The banner service reports what it does: while it is alive, the app screen must not post the banners again.
-    var serviceSeenAt = 0;
-    function serviceAlive() { return Date.now() - serviceSeenAt < 600000; }
+    // A service that says it failed does not count: after a banner it could not post (until it posts one again), or a queue it could not read
+    // (until it reads it). What it posted, or failed to post, is also kept per notification.
+    var serviceSeenAt = 0, postBroken = false, readBroken = false, servicePosts = [];
+    function serviceHeard(r) {
+        if (r.stage === 'queue-failed') { readBroken = true; }
+        if (r.stage === 'queue') { readBroken = false; }
+        if (r.stage !== 'posted' && r.stage !== 'post-failed') { return; }
+        postBroken = r.stage === 'post-failed';
+        if (!postBroken) { readBroken = false; }
+        servicePosts.push({ id: r.id, ok: !postBroken });
+        if (servicePosts.length > 20) { servicePosts.shift(); }
+    }
+    // Does the banner service post this banner? Then the app screen must not.
+    function serviceHas(id) {
+        var i;
+        for (i = servicePosts.length - 1; i >= 0; i--) { if (servicePosts[i].id === id) { return servicePosts[i].ok; } }
+        return !postBroken && !readBroken && Date.now() - serviceSeenAt < 600000;
+    }
     function cleanReport(v) {
         if (!rules.isObj(v) || !str(v.stage)) { return null; }
         var out = {};
@@ -500,6 +516,7 @@ module.exports = function (ctx) {
             try { r = cleanReport(JSON.parse(raw)); } catch (e) { r = null; }
             if (!r) { return sendJson(res, 400, { error: 'a JSON object with a stage' }); }
             r.at = serviceSeenAt = Date.now();
+            serviceHeard(r);
             serviceReports.push(r);
             if (serviceReports.length > MAX_REPORTS) { serviceReports.shift(); }
             sendJson(res, 200, { ok: true });
@@ -625,7 +642,7 @@ module.exports = function (ctx) {
                 { method: 'POST', path: 'notify', summary: 'Send a notification (JSON body with the fields above). With quiet hours it may answer {ok, id, suppressed}; a repeat inside the grouping window answers {ok, id, merged:true, count}.', returns: '{ok, id, status: queued|shown|merged|suppressed|failed, reason, effective:{mode,sound,volume,duration}, open, sound}; 429 {error, retryAfter} when the queue is full or over the rate' },
                 { method: 'GET', path: 'notify-status?id=<id>', summary: 'What happened to one of the last notifications: queued, shown, merged, suppressed, replaced, expired, dropped, rejected or failed.', returns: '{ok, id, status, reason, source, category}' },
                 { method: 'POST', path: 'ntfy', summary: 'ntfy-compatible publish: body = message; headers Title, Priority (5 alert, 4 warning), Tags; or JSON {message,title,priority,tags}.', returns: '{ok, id, open}' },
-                { method: 'GET', path: 'notifications', summary: 'The active queue (used by the app and its service); add ?js=1 for the script form.', returns: '{lang, notifications:[{id,title,message,level,mode,duration,icon,image,wallpaper,priority:"high"|"",svc,action:{label}|null,seconds}]}; svc true = the banner service posts that banner, so the app screen must not' },
+                { method: 'GET', path: 'notifications', summary: 'The active queue (used by the app and its service); add ?js=1 for the script form.', returns: '{lang, notifications:[{id,title,message,level,mode,duration,icon,image,wallpaper,priority:"high"|"",svc,action:{label}|null,seconds}]}; svc true = the banner service posts that banner (it reported in the last 10 minutes and did not say it failed), so the app screen must not' },
                 { method: 'GET', path: 'recent', summary: 'The last 20, newest first, also the held back and refused ones.', returns: '{recent:[{id,title,message,level,mode,duration,icon,image,wallpaper,theme,priority,action,source,category,status,reason,sound,volume,at,count?,suppressed?}]}; action is the button label; a refused one has only id,title,message,level,source,category,status,reason,at' },
                 { method: 'GET', path: 'img?id=<id>[&kind=wallpaper][&info=1]', summary: 'The picture of a queued notification, fetched and served by the Shard; info=1 returns {ok,type,bytes}.', returns: 'image bytes or JSON' },
                 { method: 'GET', path: 'status', summary: 'Installation status: companion app, its service, Vetro pairing, Shard version.', returns: '{version, app, appVersion, service, handoff, pairing, sound, overlay, screen, serviceDiag:{launch,reports,file}}; handoff = the queue file the banner service reads exists' },
@@ -1174,7 +1191,7 @@ module.exports = function (ctx) {
                 prune();
                 var now = Date.now();
                 var out = { lang: getLang(), notifications: queue.map(function (n) {
-                    return { id: n.id, title: n.title, message: n.message, level: n.level, mode: n.mode, duration: n.duration, icon: n.icon, image: n.image, wallpaper: n.wallpaper, priority: n.priority, svc: n.mode === 'banner' && serviceAlive(), action: n.action ? { label: n.action.label } : null, seconds: Math.ceil((n.expires - now) / 1000) };
+                    return { id: n.id, title: n.title, message: n.message, level: n.level, mode: n.mode, duration: n.duration, icon: n.icon, image: n.image, wallpaper: n.wallpaper, priority: n.priority, svc: n.mode === 'banner' && serviceHas(n.id), action: n.action ? { label: n.action.label } : null, seconds: Math.ceil((n.expires - now) / 1000) };
                 }) };
                 if (wantsScript(req)) { sendScript(res, out); } else { sendJson(res, 200, out); }
                 return true;

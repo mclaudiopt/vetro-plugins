@@ -207,7 +207,8 @@
     fetchQueue(function (err, list) {
       if (err) { busy = false; return log('err', why + ': Shard unreachable (' + err + ')'); }
       var seen = {}; try { seen = JSON.parse(localStorage.getItem(SEEN_KEY) || '{}'); } catch (e) { seen = {}; }
-      var fresh = list.filter(function (n) { return !seen[n.id]; });
+      // 2 = left to the banner service: if the Shard later says the service does not post it, the screen posts it after all.
+      var fresh = list.filter(function (n) { return !seen[n.id] || (seen[n.id] === 2 && n.mode === 'banner' && !n.svc); });
       if (!fresh.length) { busy = false; return log('inf', why + ': nothing new'); }
       var pending = fresh.length;
       // mode: 'banner' = native Samsung banner only, 'full' = full-screen card only, anything else = both.
@@ -217,7 +218,7 @@
       var onlyBanner = fresh.every(function (n) { return n.mode === 'banner'; });
       if (cardEl) { cardEl.style.display = onlyBanner ? 'none' : ''; }
       fresh.forEach(function (n) {
-        seen[n.id] = 1;
+        seen[n.id] = n.svc ? 2 : 1;
         if (n.mode !== 'banner') { showCard(n); }
         (n.mode === 'full' || n.svc ? function (t, b, cb) { cb(null); } : post)(((n.icon || EMO[n.level] || '') + ' ' + (n.title || 'Notification')).replace(/^ /, ''), n.message || '', function (e) {
           log(e ? 'err' : 'ok', (n.title || 'Notification') + ': ' + (e || 'posted'));

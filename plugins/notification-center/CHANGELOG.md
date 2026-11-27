@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.30.1
+
+- The club goal examples left the panel: the news Shard (Match alerts) simulates goals itself, with its own clubs and options.
+
 ## 0.30.0
 
 - New field `highlight` (`image` or `image2`): that logo fades in and out in `glass` and `panel` (setting `overlayMotion` on), for example the club that scored.

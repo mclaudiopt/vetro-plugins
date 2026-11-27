@@ -1,7 +1,7 @@
 {
   "id": "notification-center",
   "name": "Notification Center",
-  "version": "0.30.3",
+  "version": "0.30.4",
   "apiVersion": 1,
   "permissions": [
     "exec"

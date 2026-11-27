@@ -127,6 +127,20 @@ Later, `GET notify-status?id=<id>` answers `{ok, id, status, reason, source, cat
 
 The bar shows one notification at a time, each for its `duration`; at most 5 wait, urgent ones first.
 
+## Rules for other Shards
+
+The Notification Center is the hub: it sets the defaults and the quiet hours, and a Shard asks only for what its user chose.
+
+1. **Send everything through the hub** (`POST notify`). No `paplay`, banner or bar of your own.
+2. **Discover** at start and every 10 minutes with `GET api`: `version`, `features`, `enums.sound`. Without `features` the hub is old: send only the old fields.
+3. Always send a fixed `source` (for example `match-alerts`, `epg-alerts`) and a `category` (`goal`, `civil`, `weather`, `news`, `reminder`).
+4. Send `sound`, `volume`, `mode` or `duration` **only if the user chose it in your Shard**. The first option of such a control is "Notification Center default", and then the field is left out, so the hub's defaults per sender and category apply.
+5. **Sound:** when your Shard turns a sound on without the user picking which one, ask for `soft`. The owner of the TV can set `oneSound` (for example `soft`) so that every requested sound plays that one; a notification without `sound` stays silent. Do not change `oneSound` from a Shard.
+6. `priority: "high"` only for what must pass quiet hours. Results that change use `replace`; news that goes stale uses `ttl`.
+7. **No quiet hours of your own** (say "Set in the Notification Center"); keep only a small guard against bursts. Title up to 40 characters, message up to 200.
+8. Mark something as told only after the hub accepted it (`queued`, `shown`, `merged`, `suppressed`) and log `status` and `reason`. Retry as in "Retrying" above, at most 3 times, not after the `ttl`, and cancel the timers in `stop()`.
+9. **Panel: Vetro's controls**, not checkboxes or other unstyled native controls: an on/off option is the Vetro switch, and buttons, fields, tabs, segmented views and chips follow Vetro's [design system](https://github.com/andrearicci93/vetro/tree/main/app/design-system) (see "Interface rules" in the [README](README.md)).
+
 ## ntfy-compatible: `POST ntfy`
 
 For apps that already publish to ntfy. The body is the message; headers `Title`, `Priority` (`5` = alert, `4` = warning) and `Tags` (`warning`, `rotating_light`,

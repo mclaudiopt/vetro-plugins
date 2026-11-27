@@ -13,6 +13,10 @@ a few seconds, or as an **overlay bar** near the bottom of the screen, drawn ove
 returns the same description as JSON. Apps that already publish to [ntfy](https://ntfy.sh) can point at `POST .../api/ntfy` instead (headers `Title`,
 `Priority`, `Tags`).
 
+**The hub for every Shard:** other Shards send here instead of showing things themselves. They name themselves (`source`) and the kind of news (`category`),
+may use `ttl` and `replace`, and are told what happened (`status`, `reason`, `effective`, `GET notify-status`). What they have to follow is in
+[Rules for other Shards](API.md#rules-for-other-shards).
+
 **Senders and rules** (tab in the panel, and the routes `profiles`, `settings`, `hooks` in [API.md](API.md)): each sender can have its own defaults, on/off switch,
 rate limit and key (`X-NC-Key`); quiet hours hold back everything below a chosen level; identical repeats are counted instead of shown again; and **webhooks**
 (`POST hook/<name>`) turn any JSON, such as a GitHub or Home Assistant payload, into a notification with `{{path}}` templates.
@@ -46,19 +50,23 @@ themselves, the styles in `app/service/dashboard.js`.
 
 ## Commands it runs
 
+Two fixed commands: the sound below, and the overlay bar after it.
+
 | Command | Why |
 | --- | --- |
 | `paplay --volume=<integer> /usr/share/feedback/sound/operation/<file>.wav` | plays one of the TV's own system sounds when a notification asks for one (`sound`). `<file>` is one of 8 fixed names, the integer is 65536 times the volume you set (10-100 %) times the request's `volume` times 3 (the system sounds are quiet), and nothing else is ever run |
 
-It runs only when a request has a `sound` (or calls `POST play`), at most once every 0.8 s, with an 8 second timeout. The goodie (`POST play` with `song`) runs the same command several times in a row from a fixed list in the code (10 seconds, one song at a time). It is the only use of `exec` in the code, and the tests check the exact shape of every command.
+It runs only when a request has a `sound` (or calls `POST play`), at most once every 0.8 s, with an 8 second timeout. The goodie (`POST play` with `song`) runs the same command several times in a row from a fixed list in the code (10 seconds, one song at a time). The tests check the exact shape of every command.
+
 ### The overlay bar
 
-`mode: overlay`, `glass` and `panel` run the Shard's own helper, `dotnet <dir>/ncoverlay.dll --file <dir>/job.txt`, with the TV's `dotnet`. `<dir>` is `/home/owner/share/tmp/ncoverlay`, where the Shard unpacks the helper from `overlay/ncoverlay.dll.b64` (source: `overlay/Overlay.cs`). The text, colour, seconds, opacity, the paths of up to two PNG icons, whether to animate, the edge of the screen and the look are written into `job.txt`, one value per line, so no request text is ever on a command line. The helper draws a transparent notification-level window (the same kind the Vetro launcher uses), decodes the PNG itself, draws a flat bar, a large panel, or a glass-like bar (a gradient and a bright edge, no blur) that slides and fades, with a light running along its lower edge (setting `overlayMotion`; graphics setup from [Vetro](https://github.com/andrearicci93/vetro), MIT, (c) 2026 Vetro contributors), and exits after the duration. A new bar closes the previous one first (by its pid file, only when `/proc/<pid>/cmdline` contains `ncoverlay`).
+`mode: overlay`, `glass` and `panel` run the Shard's own helper, `dotnet <dir>/ncoverlay.dll --file <dir>/job.txt`, with the TV's `dotnet`. `<dir>` is `/home/owner/share/tmp/ncoverlay`, where the Shard unpacks the helper from `overlay/ncoverlay.dll.b64` (source: `overlay/Overlay.cs`). The text, colour, seconds, opacity, the paths of up to two PNG icons, whether to animate, the edge of the screen and the look are written into `job.txt`, one value per line, so no request text is ever on a command line. The helper draws a transparent notification-level window (the same kind the Vetro launcher uses), decodes the PNG itself, draws a large panel or a glass-like bar (a gradient and a bright edge, no blur) that slides and fades, with a light running along its lower edge (setting `overlayMotion`; graphics setup from [Vetro](https://github.com/andrearicci93/vetro), MIT, (c) 2026 Vetro contributors), and exits after the duration. A new bar closes the previous one first (by its pid file, only when `/proc/<pid>/cmdline` contains `ncoverlay`).
 
 ## Network
 
-- **Incoming:** HTTP routes under `/plugins/notification-center/api/` (`notify`, `ntfy`, `notifications`, `img`, `recent`, `lang`, `emoji`, `status`,
-  `api`, `ui`, `nt.js`), open to every device that can reach Vetro (with pairing on, senders need a key).
+- **Incoming:** HTTP routes under `/plugins/notification-center/api/` (`notify`, `notify-status`, `ntfy`, `notifications`, `recent`, `img`, `status`,
+  `service-report`, `lang`, `profiles`, `settings`, `hooks`, `hook/<name>`, `play`, `sounds`, `sound-upload`, `sound-delete`, `action`, `themes`, `apps`,
+  `export`, `import`, `emoji`, `api`, `ui`, `nt.js`), open to every device that can reach Vetro (with pairing on, devices other than the TV need a Vetro key).
 - **Outgoing, Vetro:** `POST 127.0.0.1:8099/apps/launch` with `{"appId": "..."}` to start the companion app or its service. The app id is fixed in the
   code, so no route can point the Shard at another app. Launches of the app screen are limited to one every 2 seconds; the banner service is launched for every notification in banner mode (limit a noisy sender with its per-minute rate in "Sources").
 - **Outgoing, images:** no code is downloaded. The one exception is the optional `image`, `image2` and `wallpaper` fields: the Shard fetches that URL once (GET, up
@@ -73,8 +81,10 @@ It runs only when a request has a `sound` (or calls `POST play`), at most once e
 In `ctx.config` (on the TV, kept across restarts and updates):
 - the display language, and the list of the last 20 notifications sent (title, message, level, mode, icon, sound, picture and wallpaper URLs, time), so "Recently sent" and Resend survive a restart;
 - the **sources** (profiles): per sender its icon, level, mode, duration, sound, volume, rate limit and on/off switch, and its **key in plain text** if it has one (the API never returns a key, only `hasKey`; but it is stored as text in the Shard's settings);
-- the **settings**: quiet hours, grouping window, strict mode, sound volume and sound delay;
-- the **webhooks** (their templates).
+- the **settings**: quiet hours, grouping window, strict mode, sound volume and delay, one sound for everything, banners as a bar, and the bar's opacity;
+- the **webhooks** (their templates), your **wallpaper themes** (name and picture address), and the senders that have sent something, with their categories.
+
+Your own sounds are WAV files in the Shard's sound folder on the TV.
 
 The queue (up to 5 active notifications) and the grouping memory (at most 200 recent notifications, only those inside the grouping window) live in memory and are cleared when the Shard stops.
 The queue file and the file of already shown ids (`/tmp/notification-center-seen.json`) are temporary files in `/tmp`.
@@ -83,10 +93,11 @@ The queue file and the file of already shown ids (`/tmp/notification-center-seen
 ## Install
 
 1. Vetro with root connected. If Vetro keeps restarting, set the TV's **Host PC IP to `127.0.0.1`** (Developer Mode), or it can end up in safe mode.
-2. Install this Shard from the catalog and switch it on.
+2. Install this Shard and switch it on. The catalog has an older version; for the newest, take the `.vplugin` from the releases linked above and load it with
+   Vetro's **Developer mode**.
 3. Install the companion app: download the unsigned `.wgt` from the releases linked above (or build it from the text files in [`app/`](app/) plus any
-   512x512 `icon.png`), sign it with your own certificate and install it with Apps2Samsung, TV-Store or Tizen Studio. It needs the privileges
-   `notification` and `internet`. The app id must stay `NotifCtr01.NotifCenter` and the service id `NotifCtr01.Svc`.
+   512x512 `icon.png`), sign it with your own certificate and install it with Apps2Samsung, TV-Store or Tizen Studio (app version 0.2.5). It needs the privileges
+   `notification`, `internet` and `systeminfo`. The app id must stay `NotifCtr01.NotifCenter` and the service id `NotifCtr01.Svc`.
 4. Send a notification:
 
 ```
@@ -121,11 +132,14 @@ self-contained.
 - **Vetro / Node:** the Shard is plain ES5 and uses only Node 4.4 APIs (request timeouts are set with `setTimeout`, because the `timeout` option only exists
   from Node 6.8). It was checked with an ES5-only parser, and the runtime lifecycle test (`npm run test:runtime`) plus a request/queue/icon test pass on a **real
   Node 4.9.1** (the last 4.x release). The Node 4.4.7 binary itself crashes at start on the Windows 11 machine used for the work, so 4.4.7 exactly has not been run.
-- **Samsung TVs:** the app declares `required_version="6.0"`, so it needs **Tizen 6.0 or newer (2021 models and later)**. Everything was tested on one TV
-  only: **Samsung Q70C, Tizen 9.0, Vetro 0.7.0**. Older TVs and Smart Monitors have not been tried.
+- **Samsung TVs:** the app declares `required_version="6.0"`, so it needs **Tizen 6.0 or newer (2021 models and later)**. Used on a **Samsung Q70C (Tizen 9.0)**
+  and a **Samsung LS43BM700 monitor** (see "Limitations"); other models are little or not tried.
 
 ## Limitations (all measured on a real TV)
 
+- **On some screens the native banner does not appear** (seen on the LS43BM700 monitor: the service calls it without error and nothing is shown; cause unknown).
+  Switch on **banners as a bottom toast** (setting `bannerAsOverlay`).
+- If the banner service reports that it could not post a banner, that banner can go unshown.
 - The native banner (`webapis.postPlainNotification`, which exists only inside a web *service*) takes plain text and a duration: **no icon, level or colour**.
   The Shard puts an emoji in front of the title instead (by level, or the icon you choose).
 - Full-screen card / both: the companion app comes to the front, shows the card for `duration` seconds and exits, so what was playing is interrupted briefly.
@@ -139,7 +153,10 @@ self-contained.
 
 ## Tested on
 
-Samsung Q70C (TQ55Q70CATXXC), Tizen 9.0, Vetro 0.7.0, Shard 0.2.0 installed from the bundle as a file (Developer mode), companion app 0.2.2.
+**0.26.0:** automated tests, the panel in a browser (computer and phone width), and installed on the Q70C and the LS43BM700 monitor. Its notifications have not
+yet been checked by eye on a screen. The bottom bar was seen on the monitor with an earlier version.
+
+**0.2.0:** Samsung Q70C (TQ55Q70CATXXC), Tizen 9.0, Vetro 0.7.0, Shard 0.2.0 installed from the bundle as a file (Developer mode), companion app 0.2.2.
 
 - **Pairing off:** notifications sent with `curl` from a PC: native banner (`banner`), full-screen card (`full`) and both; English and Portuguese; the four
   levels with their icons; `duration`; Resend from "Recently sent"; the TV returned to the previous app each time.

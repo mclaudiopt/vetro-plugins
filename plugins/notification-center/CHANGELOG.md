@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.30.4
+
+- Documentation brought up to date. No change in behaviour.
+
 ## 0.30.3
 
 - The default look is now `glass`: a request without `mode` is the glass bar (the banner when the helper cannot run). A TV that saved another default keeps it.

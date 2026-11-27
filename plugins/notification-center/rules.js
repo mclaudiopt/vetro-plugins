@@ -5,7 +5,7 @@
 // (String({toString: 1}) throws), and names are looked up with hasOwnProperty (so "__proto__" and "constructor" are not levels or modes).
 var LEVEL_RANK = { info: 0, ok: 0, warn: 1, alert: 2 };
 var LEVELS = { info: 1, ok: 1, warn: 1, alert: 1 };
-var MODES = { both: 1, banner: 1, full: 1, overlay: 1 };
+var MODES = { both: 1, banner: 1, full: 1, overlay: 1, glass: 1, panel: 1 };
 // Default wallpapers of the full-screen card, shipped with the Shard as small SVG files (wallpapers/<name>.svg).
 var THEMES = { sport: 1, news: 1 };
 // Wallpaper themes the user added (names only; the Shard keeps this in step with its configuration). A theme is a built-in one or one of these.
@@ -163,8 +163,15 @@ function sanitizeSettings(s, old) {
         strict: has(s, 'strict') ? s.strict === true : old.strict === true,
         soundVolume: has(s, 'soundVolume') && !isNaN(num(s.soundVolume)) ? clampVolume(s.soundVolume) : (has(old, 'soundVolume') ? clampInt(old.soundVolume, 10, 100, 100) : 100),
         overlayOpacity: has(s, 'overlayOpacity') ? clampInt(s.overlayOpacity, 20, 100, has(old, 'overlayOpacity') ? clampInt(old.overlayOpacity, 20, 100, 88) : 88) : (has(old, 'overlayOpacity') ? clampInt(old.overlayOpacity, 20, 100, 88) : 88),
+        // The overlay bar: near which edge, whether it slides and fades, and its seconds when a request names none.
+        overlayPosition: (has(s, 'overlayPosition') ? s.overlayPosition : old.overlayPosition) === 'top' ? 'top' : 'bottom',
+        overlayMotion: has(s, 'overlayMotion') ? s.overlayMotion === true : old.overlayMotion !== false,
+        overlayDuration: clampInt(s.overlayDuration, 1, 60, clampInt(old.overlayDuration, 1, 60, 8)),
         // One sound for everything: replaces whatever sound a notification asks for; '' = each keeps its own. Silent ones stay silent.
         oneSound: has(s, 'oneSound') ? (hasSound(s.oneSound) ? s.oneSound : '') : str(old.oneSound),
+        // The look of a request that names none (and whose sender sets none), and whether a banner with a picture is drawn as the bar.
+        defaultMode: has(MODES, s.defaultMode) ? s.defaultMode : (has(MODES, old.defaultMode) ? old.defaultMode : 'banner'),
+        bannerImageAsBar: has(s, 'bannerImageAsBar') ? s.bannerImageAsBar === true : old.bannerImageAsBar === true,
         // For a TV whose native banner does not show: `banner` requests (also the ones without a mode) are drawn as the overlay bar.
         bannerAsOverlay: has(s, 'bannerAsOverlay') ? s.bannerAsOverlay === true : old.bannerAsOverlay === true,
         soundDelayMs: has(s, 'soundDelayMs') ? clampInt(s.soundDelayMs, 0, 10000, has(old, 'soundDelayMs') ? clampInt(old.soundDelayMs, 0, 10000, 3000) : 3000) : (has(old, 'soundDelayMs') ? clampInt(old.soundDelayMs, 0, 10000, 3000) : 3000)

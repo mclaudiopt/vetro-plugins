@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.29.0
+
+- New looks: `mode: glass` (animated glass bar) and `mode: panel` (large dark panel, no buttons). `overlay` stays the flat bar.
+- A banner with a picture is a banner again unless `bannerImageAsBar` is on.
+- Settings `defaultMode`, `overlayPosition`, `overlayMotion`, `overlayDuration`.
+- Titles and messages are cut by their real width.
+
 ## 0.27.0
 
 - **Pictures for every Shard (club logos and the like):** new field `image2`, a second picture with the same rules as `image` (home and away). The bottom toast draws `image` on the left and `image2` on the right; the full-screen card shows both. `GET api` lists the feature `image2`; `GET notifications`, `GET recent` and `GET img?kind=image2` carry it, and Resend keeps it.

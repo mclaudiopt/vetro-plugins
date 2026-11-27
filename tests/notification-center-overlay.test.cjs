@@ -98,7 +98,7 @@ test('hostile text only ever lands in the job file, never in the command', () =>
     const lines = jobLines(dir);
     assert.ok(lines[0].includes('pwned'));
     assert.ok(lines[1].includes('second line'));   // a newline in a value cannot add a job line: it became a space
-    assert.equal(lines.length, 8);                 // seven values and the final newline
+    assert.equal(lines.length, 11);                // ten values and the final newline
 }));
 
 // Serves the same PNG for every path ending in .png and for app icons, and a GIF for the rest; remembers what was asked.
@@ -132,7 +132,9 @@ test('image and image2 are the left and right icons of the bar', () => withPictu
     commands.forEach(c => assert.match(c, COMMAND));
 })));
 
-test('a banner with a picture becomes the bar; without one it stays a banner, and full and both are not changed', () => withShard(async s => {
+test('with bannerImageAsBar, a banner with a picture becomes the bar; without one it stays a banner, and full and both are not changed', () => withShard(async s => {
+    assert.equal((await call(s, 'POST', 'notify', {message: 'off', image: 'http://127.0.0.1:9/a.png', open: false, group: false})).json.effective.mode, 'banner', 'off by default');
+    await call(s, 'POST', 'settings', {bannerImageAsBar: true});
     // open: false, so nothing is launched; the pictures are on an address that does not answer.
     const base = 'http://127.0.0.1:9';
     for (const extra of [{image: base + '/a.png'}, {image2: base + '/b.png'}, {app: '9Ur5IzDKqV.TizenYouTube'}, {mode: 'banner', image: base + '/a.png'}, {mode: 'nonsense', image: base + '/a.gif'}]) {
@@ -179,6 +181,7 @@ test('both pictures of a card are in GET notifications and served by GET img, ea
 })));
 
 test('a sender profile that asks for banner still gets the bar when the request has pictures, and keeps image2', () => withShard(async s => {
+    await call(s, 'POST', 'settings', {bannerImageAsBar: true});
     await call(s, 'POST', 'profiles', {source: 'match', mode: 'banner', allowMode: false});
     await call(s, 'POST', 'notify', {source: 'match', message: 'goal', mode: 'full', image: 'http://pics.test/a.png', image2: 'http://pics.test/b.png', open: false});
     const e = await recentOne(s);
@@ -328,3 +331,76 @@ test('service reports are cleaned, capped and shown in GET status', () => withSh
     assert.ok(d.reports[7].error.length <= 200);
     assert.equal(d.file, null);
 }));
+
+test('the bar settings: animated at the bottom by default, position, motion and its own duration go into the job file', () => withShard(async (s, commands, dir) => {
+    const d = (await call(s, 'GET', 'settings')).json.settings;
+    assert.deepEqual([d.overlayPosition, d.overlayMotion, d.overlayDuration], ['bottom', true, 8]);
+    await call(s, 'POST', 'notify', {message: 'a', mode: 'overlay'});
+    await wait(30);
+    assert.deepEqual([jobLines(dir)[3]].concat(jobLines(dir).slice(7, 9)), ['8', '1', 'bottom']);
+    const n = (await call(s, 'POST', 'settings', {overlayPosition: 'top', overlayMotion: false, overlayDuration: 15})).json.settings;
+    assert.deepEqual([n.overlayPosition, n.overlayMotion, n.overlayDuration], ['top', false, 15]);
+    // another setting leaves them as they are
+    assert.equal((await call(s, 'POST', 'settings', {overlayOpacity: 50})).json.settings.overlayDuration, 15);
+    const r = await call(s, 'POST', 'notify', {message: 'b', mode: 'overlay', group: false});
+    assert.equal(r.json.effective.duration, 15);
+    await wait(30);
+    assert.deepEqual([jobLines(dir)[3]].concat(jobLines(dir).slice(7, 9)), ['15', '0', 'top']);
+    // a duration of the request wins, and the other modes keep their own default
+    assert.equal((await call(s, 'POST', 'notify', {message: 'c', mode: 'overlay', duration: 3, group: false})).json.effective.duration, 3);
+    assert.equal((await call(s, 'POST', 'notify', {message: 'card', mode: 'full', open: false})).json.effective.duration, 8);
+}));
+
+test('the bar settings are cleaned', () => {
+    const s = rules.sanitizeSettings({overlayPosition: 'left', overlayMotion: 'yes', overlayDuration: 500}, {});
+    assert.deepEqual([s.overlayPosition, s.overlayMotion, s.overlayDuration], ['bottom', false, 60]);
+    const kept = rules.sanitizeSettings({overlayDuration: {toString: 1}}, {overlayPosition: 'top', overlayMotion: false, overlayDuration: 20});
+    assert.deepEqual([kept.overlayPosition, kept.overlayMotion, kept.overlayDuration], ['top', false, 20]);
+});
+
+test('the helper keeps a still bar for a TV where the animator cannot run', () => {
+    const src = fs.readFileSync(path.join(folder, 'overlay', 'Overlay.cs'), 'utf8');
+    assert.match(src, /EntryPointNotFoundException/);
+    assert.match(src, /SettleCb/);
+});
+
+
+test('overlay is the flat bar, glass and panel say their look in the job file', () => withShard(async (s, commands, dir) => {
+    for (const [mode, look] of [['overlay', ''], ['glass', 'glass'], ['panel', 'panel']]) {
+        const r = await call(s, 'POST', 'notify', {message: mode, mode, group: false, replace: 'one'});
+        assert.equal(r.json.effective.mode, mode);
+        assert.equal(r.json.effective.duration, 8);
+        await wait(30);
+        assert.equal(jobLines(dir)[9], look, mode);
+    }
+    assert.deepEqual((await call(s, 'GET', 'notifications')).json.notifications, [], 'none of them goes to the app or the banner service');
+}));
+
+test('a panel with a button is the full-screen card, because the panel takes no remote keys', () => withShard(async s => {
+    const r = await call(s, 'POST', 'notify', {message: 'open?', mode: 'panel', action: {app: '9Ur5IzDKqV.TizenYouTube'}, open: false});
+    assert.equal(r.json.effective.mode, 'full');
+    assert.equal((await call(s, 'POST', 'notify', {message: 'no button', mode: 'panel', action: {app: 'not an id!'}, open: false, group: false})).json.effective.mode, 'panel');
+}));
+
+test('defaultMode is the look of a request that names none; a named look and a sender profile win', () => withShard(async s => {
+    const mode = async extra => (await call(s, 'POST', 'notify', Object.assign({message: 'm', open: false, group: false}, extra))).json.effective.mode;
+    assert.equal(await mode({}), 'banner');
+    assert.equal((await call(s, 'POST', 'settings', {defaultMode: 'glass'})).json.settings.defaultMode, 'glass');
+    assert.equal(await mode({}), 'glass');
+    assert.equal(await mode({mode: 'nonsense'}), 'glass');
+    assert.equal(await mode({mode: 'banner'}), 'banner');
+    assert.equal(await mode({mode: 'full'}), 'full');
+    await call(s, 'POST', 'profiles', {source: 'news', mode: 'panel'});
+    assert.equal(await mode({source: 'news'}), 'panel');
+    assert.equal((await call(s, 'POST', 'settings', {defaultMode: '__proto__'})).json.settings.defaultMode, 'glass', 'a value that is no mode changes nothing');
+    await call(s, 'POST', 'settings', {bannerAsOverlay: true});
+    assert.equal(await mode({mode: 'banner'}), 'overlay');
+    assert.equal(await mode({}), 'glass');
+}));
+
+test('the new look settings are cleaned, and are banner and off by default', () => {
+    const s = rules.sanitizeSettings({}, {});
+    assert.deepEqual([s.defaultMode, s.bannerImageAsBar], ['banner', false]);
+    const kept = rules.sanitizeSettings({defaultMode: 'x', bannerImageAsBar: 'yes'}, {defaultMode: 'panel', bannerImageAsBar: true});
+    assert.deepEqual([kept.defaultMode, kept.bannerImageAsBar], ['panel', false]);
+});

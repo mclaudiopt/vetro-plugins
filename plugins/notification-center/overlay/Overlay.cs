@@ -10,6 +10,7 @@
 //   8 optional: 1 = animated (without it, or when the animator cannot run, the bar is simply there)
 //   9 optional: "top" = the bar near the top of the screen
 //  10 optional: the look, "glass" or "panel"; anything else is the flat bar
+//  11 optional: "image" or "image2" = that logo fades in and out (glass and panel)
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -94,7 +95,8 @@ internal static class NcOverlay
     // Everything on the bar, at its place inside it, so the whole bar can move and fade as one. Rgb is -1 for a picture.
     private struct Item { public IntPtr O; public int X, Y, Rgb; }
     private static readonly List<Item> Items = new List<Item>();
-    private static int _originX, _originY, _slide, _span, _runner = -1;
+    private static int _originX, _originY, _slide, _span, _runner = -1, _pulse = -1;
+    private static double _fade = 1;   // of the highlighted logo
     private static double _start;
     private static bool _leaving;
 
@@ -109,10 +111,12 @@ internal static class NcOverlay
     private static void Place(double p)
     {
         int y = _originY + (int)Math.Round((1 - p) * _slide), a = (int)Math.Round(255 * p);
-        foreach (Item i in Items)
+        for (int k = 0; k < Items.Count; k++)
         {
+            Item i = Items[k];
+            int ia = k == _pulse ? (int)(a * _fade) : a;
             evas_object_move(i.O, _originX + i.X, y + i.Y);
-            if (i.Rgb < 0) evas_object_color_set(i.O, a, a, a, a);
+            if (i.Rgb < 0) evas_object_color_set(i.O, ia, ia, ia, ia);
             else evas_object_color_set(i.O, ((i.Rgb >> 16) & 255) * a / 255, ((i.Rgb >> 8) & 255) * a / 255, (i.Rgb & 255) * a / 255, a);
         }
     }
@@ -121,6 +125,7 @@ internal static class NcOverlay
     private static int Frame(IntPtr data)
     {
         double now = ecore_time_get(), t = Math.Min(1, (now - _start) / (_leaving ? LeaveSeconds : EnterSeconds));
+        _fade = 0.55 + 0.45 * Math.Cos(now * 2 * Math.PI / 2.5);   // every 2.5 s, between 10 and 100 %
         if (_runner >= 0) { Item r = Items[_runner]; r.X = 40 + (int)(now * 400 % _span); Items[_runner] = r; }
         Place(_leaving ? 1 - t : t);
         return 1;
@@ -484,6 +489,8 @@ internal static class NcOverlay
         Panel(evas, boxW, boxH, panel ? Math.Max(alpha, PanelMinAlpha) : alpha, glass);
         Stripe(evas, 22, 20, 12, boxH - 40, accent);
         if (motion) { _runner = Items.Count; _span = boxW - 240; Stripe(evas, 40, boxH - 14, 160, 8, accent); }
+        if (motion && (at(10) == "image" && icon1 != null || at(10) == "image2" && icon2 != null))
+            _pulse = Items.Count + (at(10) == "image2" && icon1 != null ? 1 : 0);   // the logos are drawn first, left then right
         if (panel) DrawPanel(evas, title, body, titleLabel, icon1, w1, h1, icon2, w2, h2);
         else DrawBar(evas, boxH, title, body, titleLabel, icon1, w1, h1, icon2, w2, h2);
 

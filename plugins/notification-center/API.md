@@ -37,6 +37,7 @@ JSON body. Only `message` is required.
 | `icon` | string, max 16 | by level | One emoji (or emoji sequence) in front of the title, e.g. the ball for a goal. Cut at whole emoji only. |
 | `image` | http/https URL, max 290 | none | A picture, for example the logo of a club (the home one): under the message on the **full-screen card**, and the left icon of the **bar** (PNG). |
 | `image2` | http/https URL, max 290 | none | A **second picture**, for example the logo of the away club: next to `image` on the card, the right icon of the bar (PNG). Same rules as `image`. |
+| `highlight` | `image` or `image2` | none | That logo fades in and out, in `glass` and `panel` with `overlayMotion` on, for example the club that scored. Check that `GET api` lists the feature `highlight`. |
 | `wallpaper` | http/https URL, max 290 | none | A darkened full-screen background behind the card. Can be combined with `image`. |
 | `seconds` | integer 5-300 | `30` | How long it may wait in the queue (always at least `duration` + 20). |
 | `open` | boolean | `true` | `false` only queues it, without launching the app or its service. |

@@ -702,7 +702,7 @@ button.chip { cursor: pointer; background: var(--danger-soft); }
         rb[k].addEventListener("click", function () {
           var n = lastRecent[parseInt(this.getAttribute("data-i"), 10)];
           if (!n) { return; }
-          act(this, api("notify", { title: n.title, message: n.message, level: n.level, icon: n.icon, image: n.image, image2: n.image2, wallpaper: n.wallpaper, mode: n.mode, sound: n.sound, volume: n.volume || undefined, source: n.source, category: n.category, group: false, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked })
+          act(this, api("notify", { title: n.title, message: n.message, level: n.level, icon: n.icon, image: n.image, image2: n.image2, highlight: n.highlight, wallpaper: n.wallpaper, mode: n.mode, sound: n.sound, volume: n.volume || undefined, source: n.source, category: n.category, group: false, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked })
             .then(function (r) { $("recmsg").textContent = outcome(r); $("recmsg").className = "msg ok"; recent(); })
             .catch(function (e) { $("recmsg").textContent = e.message; $("recmsg").className = "msg err"; recent(); throw e; }));
         });

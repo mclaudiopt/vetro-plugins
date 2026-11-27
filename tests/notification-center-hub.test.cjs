@@ -114,7 +114,7 @@ test('the package is small enough for the TV to install', () => {
 });
 
 test('GET api lists the features',() => withShard(async ({call}) => {
-    assert.deepEqual((await call('GET', 'api')).json.features, ['category', 'status', 'ttl', 'replace', 'policy', 'image2']);
+    assert.deepEqual((await call('GET', 'api')).json.features, ['category', 'status', 'ttl', 'replace', 'policy', 'image2', 'highlight']);
 }));
 
 test('a sender stops being new once the panel opens it, without getting a profile', () => withShard(async ({call, send}) => {

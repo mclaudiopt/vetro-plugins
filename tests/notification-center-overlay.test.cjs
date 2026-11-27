@@ -98,7 +98,7 @@ test('hostile text only ever lands in the job file, never in the command', () =>
     const lines = jobLines(dir);
     assert.ok(lines[0].includes('pwned'));
     assert.ok(lines[1].includes('second line'));   // a newline in a value cannot add a job line: it became a space
-    assert.equal(lines.length, 11);                // ten values and the final newline
+    assert.equal(lines.length, 12);                // eleven values and the final newline
 }));
 
 // Serves the same PNG for every path ending in .png and for app icons, and a GIF for the rest; remembers what was asked.
@@ -404,3 +404,13 @@ test('the new look settings are cleaned, and are banner and off by default', () 
     const kept = rules.sanitizeSettings({defaultMode: 'x', bannerImageAsBar: 'yes'}, {defaultMode: 'panel', bannerImageAsBar: true});
     assert.deepEqual([kept.defaultMode, kept.bannerImageAsBar], ['panel', false]);
 });
+
+test('highlight names one of the two logos and goes into the job file and the log', () => withShard(async (s, commands, dir) => {
+    for (const [sent, kept] of [['image2', 'image2'], ['image', 'image'], ['left', ''], [{toString: 1}, '']]) {
+        await call(s, 'POST', 'notify', {message: 'goal', mode: 'glass', highlight: sent, group: false, replace: 'one'});
+        await wait(30);
+        assert.equal(jobLines(dir)[10], kept);
+        assert.equal((await recentOne(s)).highlight, kept);
+    }
+    assert.ok((await call(s, 'GET', 'api')).json.features.includes('highlight'));
+}));

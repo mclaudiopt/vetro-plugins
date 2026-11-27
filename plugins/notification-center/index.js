@@ -412,7 +412,7 @@ module.exports = function (ctx) {
     function isPng(b) { return b && b.length > 33 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47; }
     function overlayRun(note, icons, dir) {
         function line(v) { return str(v).replace(/[\r\n]+/g, ' '); }
-        var s = settingsNow(), job = [line(note.title), line(note.message), OVERLAY_COLORS[has(OVERLAY_COLORS, note.level) ? note.level : 'info'], note.duration, s.overlayOpacity, icons[0], icons[1], s.overlayMotion ? 1 : 0, s.overlayPosition, note.mode === 'overlay' ? '' : note.mode].join('\n') + '\n';
+        var s = settingsNow(), job = [line(note.title), line(note.message), OVERLAY_COLORS[has(OVERLAY_COLORS, note.level) ? note.level : 'info'], note.duration, s.overlayOpacity, icons[0], icons[1], s.overlayMotion ? 1 : 0, s.overlayPosition, note.mode === 'overlay' ? '' : note.mode, note.highlight].join('\n') + '\n';
         if (!putFile(dir + '/job.txt', job)) { return setStatus(note.id, 'failed', 'could not write the bar'); }
         // A bar that is still up is closed first (its pid is only used while it really is our helper), then the new one starts in the background.
         var cmd = 'P=' + dir + '/pid; if [ -f $P ] && grep -q ncoverlay /proc/$(cat $P)/cmdline 2>/dev/null; then kill $(cat $P) 2>/dev/null; fi; ' +
@@ -615,7 +615,7 @@ module.exports = function (ctx) {
         try { ver = require('./manifest.json').version; } catch (e) { /* manifest not readable */ }
         return {
             name: 'notification-center', version: ver, apiVersion: 1,
-            features: ['category', 'status', 'ttl', 'replace', 'policy', 'image2'],
+            features: ['category', 'status', 'ttl', 'replace', 'policy', 'image2', 'highlight'],
             base: '/plugins/notification-center/api/',
             auth: 'Same as the rest of Vetro: no key with pairing off; with pairing on, other devices send "Authorization: Bearer <key>". Shards on the same TV call http://127.0.0.1:8099 and need no key.',
             enums: { level: Object.keys(LEVELS), mode: Object.keys(MODES), sound: soundNames() },
@@ -629,6 +629,7 @@ module.exports = function (ctx) {
                 icon: { type: 'string', max: MAX_ICON, note: 'One emoji (or an emoji sequence) in front of the title; default by level. Cut at whole emoji, never in the middle of one.' },
                 image: { type: 'url', note: 'http/https picture under the message on the full-screen card, or the left icon of the overlay bar (PNG), for example the logo of the home club. The Shard fetches it.' },
                 image2: { type: 'url', note: 'A second http/https picture, for example the logo of the away club: next to `image` on the card, the right icon of the overlay bar (PNG). Same rules as image; `app` does not fill it.' },
+                highlight: { type: 'string', enum: ['image', 'image2'], note: 'That logo fades in and out in glass and panel, for example the club that scored.' },
                 app: { type: 'string', note: 'Id of an app installed on the TV (for example 9Ur5IzDKqV.TizenYouTube; GET /apps on Vetro lists them). Its icon is used as the picture when there is no image: the card shows it, the overlay bar uses it as its icon.' },
                 wallpaper: { type: 'url', note: 'http/https full-screen background behind the card. The Shard fetches it. It wins over `theme`.' },
                 theme: { type: 'string', enum: themeNames(), note: 'A default wallpaper for the full-screen card: sport or news (shipped with the Shard) or a theme you added (GET themes), used when the request has no `wallpaper`. A source can have its own default theme.' },
@@ -1036,6 +1037,7 @@ module.exports = function (ctx) {
                 icon: cleanIcon(b.icon),
                 image: image,
                 image2: image2,
+                highlight: b.highlight === 'image' || b.highlight === 'image2' ? b.highlight : '',
                 wallpaper: cleanUrl(b.wallpaper) || themeWallpaper(b.theme),
                 theme: rules.hasTheme(b.theme) ? b.theme : '',
                 priority: b.priority === 'high' ? 'high' : '',
@@ -1051,7 +1053,7 @@ module.exports = function (ctx) {
                 volume: soundVolume(b.volume),
                 expires: Date.now() + secs * 1000
             };
-            var entry = { id: note.id, title: note.title, message: note.message, level: note.level, mode: note.mode, duration: note.duration, icon: note.icon, image: note.image, image2: note.image2, wallpaper: note.wallpaper, theme: note.theme, priority: note.priority, action: note.action ? note.action.label : '', source: source, category: category, status: 'queued', reason: '', sound: note.sound, volume: note.volume, at: Date.now() };
+            var entry = { id: note.id, title: note.title, message: note.message, level: note.level, mode: note.mode, duration: note.duration, icon: note.icon, image: note.image, image2: note.image2, highlight: note.highlight, wallpaper: note.wallpaper, theme: note.theme, priority: note.priority, action: note.action ? note.action.label : '', source: source, category: category, status: 'queued', reason: '', sound: note.sound, volume: note.volume, at: Date.now() };
             var effective = { mode: note.mode, sound: note.sound, volume: note.volume || 100, duration: note.duration };
             // Quiet hours: below the allowed level the notification is only recorded, never shown.
             if (note.priority !== 'high' && rules.isQuiet(settings, note.level, new Date())) {

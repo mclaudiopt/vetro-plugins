@@ -19,7 +19,7 @@ function start(options = {}) {
         id: 'notification-center', dir: fs.mkdtempSync(path.join(os.tmpdir(), 'nc-ovl-shard-')),
         config: {get: () => JSON.parse(JSON.stringify(config)), set: v => { config = JSON.parse(JSON.stringify(v)); }},
         queueFile: path.join(os.tmpdir(), 'nc-q-' + process.pid + '-' + Math.random().toString(36).slice(2) + '.json'),
-        overlay: {dir, secondMs: options.secondMs || 0},
+        overlay: {dir: options.dir || dir, secondMs: options.secondMs || 0},
         sound: {gapMs: 0, waitMs: 0, songScale: 0.01}
     };
     if (options.vetro) ctx.vetro = options.vetro;
@@ -98,7 +98,92 @@ test('hostile text only ever lands in the job file, never in the command', () =>
     const lines = jobLines(dir);
     assert.ok(lines[0].includes('pwned'));
     assert.ok(lines[1].includes('second line'));   // a newline in a value cannot add a job line: it became a space
-    assert.equal(lines.length, 7);                 // six values and the final newline
+    assert.equal(lines.length, 8);                 // seven values and the final newline
+}));
+
+// Serves the same PNG for every path ending in .png and for app icons, and a GIF for the rest; remembers what was asked.
+async function withPictures(fn) {
+    const png = tinyPng(), asked = [];
+    const server = http.createServer((req, res) => {
+        asked.push(req.url);
+        if (/\.png$|^\/apps\/icon/.test(req.url)) { res.writeHead(200, {'Content-Type': 'image/png'}); res.end(png); } else { res.writeHead(200, {'Content-Type': 'image/gif'}); res.end(Buffer.from('GIF89a' + 'x'.repeat(60))); }
+    });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    try { await fn('http://127.0.0.1:' + server.address().port, png, asked); } finally { server.close(); }
+}
+const recentOne = async s => (await call(s, 'GET', 'recent')).json.recent[0];
+
+test('image and image2 are the left and right icons of the bar', () => withPictures((base, png) => withShard(async (s, commands, dir) => {
+    await call(s, 'POST', 'notify', {message: 'home v away', mode: 'overlay', image: base + '/home.png', image2: base + '/away.png', group: false});
+    await wait(300);
+    assert.equal(commands.length, 1, 'one bar, started when both pictures are there');
+    assert.ok(jobLines(dir)[5].endsWith('/icon.png'));
+    assert.ok(jobLines(dir)[6].endsWith('/icon2.png'));
+    assert.deepEqual(fs.readFileSync(path.join(dir, 'icon2.png')), png);
+    await call(s, 'POST', 'notify', {message: 'away only', mode: 'overlay', image2: base + '/away.png', group: false});
+    await wait(300);
+    assert.equal(jobLines(dir)[5], '');
+    assert.ok(jobLines(dir)[6].endsWith('/icon2.png'));
+    await call(s, 'POST', 'notify', {message: 'one is not a png', mode: 'overlay', image: base + '/home.png', image2: base + '/away.gif', group: false});
+    await wait(300);
+    assert.ok(jobLines(dir)[5].endsWith('/icon.png'));
+    assert.equal(jobLines(dir)[6], '');
+    assert.equal(commands.length, 3);
+    commands.forEach(c => assert.match(c, COMMAND));
+})));
+
+test('a banner with a picture becomes the bar; without one it stays a banner, and full and both are not changed', () => withShard(async s => {
+    // open: false, so nothing is launched; the pictures are on an address that does not answer.
+    const base = 'http://127.0.0.1:9';
+    for (const extra of [{image: base + '/a.png'}, {image2: base + '/b.png'}, {app: '9Ur5IzDKqV.TizenYouTube'}, {mode: 'banner', image: base + '/a.png'}, {mode: 'nonsense', image: base + '/a.gif'}]) {
+        const r = await call(s, 'POST', 'notify', Object.assign({message: 'pic', open: false, group: false}, extra));
+        assert.equal(r.json.effective.mode, 'overlay', JSON.stringify(extra));
+        assert.equal((await recentOne(s)).mode, 'overlay');
+    }
+    for (const extra of [{}, {mode: 'banner'}, {image: 'file:///etc/passwd'}, {image2: 'javascript:alert(1)'}, {app: 'not an id!'}, {image: 'http://x/' + 'a'.repeat(300)}]) {
+        await call(s, 'POST', 'notify', Object.assign({message: 'plain', open: false, group: false}, extra));
+        const e = await recentOne(s);
+        assert.equal(e.mode, 'banner', JSON.stringify(extra));
+        assert.equal(e.image2, '');
+    }
+    for (const mode of ['full', 'both']) {
+        await call(s, 'POST', 'notify', {message: mode, mode, image: base + '/a.png', image2: base + '/b.png', open: false, group: false});
+        const e = await recentOne(s);
+        assert.equal(e.mode, mode);
+        assert.equal(e.image2, base + '/b.png');
+    }
+}, {vetro: {host: '127.0.0.1', port: 9}}));
+
+test('a banner with a picture stays a banner when the bar cannot be drawn (no exec, or the helper cannot be unpacked)', async () => {
+    const send = async s => {
+        await call(s, 'POST', 'notify', {message: 'pic', image: 'http://pics.test/a.png', image2: 'http://pics.test/b.png', open: false});
+        assert.equal((await recentOne(s)).mode, 'banner');
+    };
+    await withShard(send, {execute: null});
+    const blocked = path.join(os.tmpdir(), 'nc-not-a-folder-' + process.pid);
+    fs.writeFileSync(blocked, 'x');
+    try { await withShard(send, {dir: blocked}); } finally { fs.unlinkSync(blocked); }
+});
+
+test('both pictures of a card are in GET notifications and served by GET img, each one its own', () => withPictures((base, png, asked) => withShard(async s => {
+    const r = await call(s, 'POST', 'notify', {message: 'card', mode: 'full', image: base + '/home.png', image2: base + '/away.png', open: false});
+    const n = (await call(s, 'GET', 'notifications')).json.notifications[0];
+    assert.equal(n.image2, base + '/away.png');
+    for (const q of ['id=' + r.json.id, 'kind=image2&id=' + r.json.id]) {
+        await new Promise(resolve => {
+            const req = new EventEmitter(); req.method = 'GET'; req.url = '/img?' + q; req.headers = {};
+            s.route(req, {writeHead(code) { assert.equal(code, 200); }, end(buf) { assert.deepEqual(buf, png); resolve(); }}, 'img');
+        });
+    }
+    assert.deepEqual(asked, ['/home.png', '/away.png']);
+})));
+
+test('a sender profile that asks for banner still gets the bar when the request has pictures, and keeps image2', () => withShard(async s => {
+    await call(s, 'POST', 'profiles', {source: 'match', mode: 'banner', allowMode: false});
+    await call(s, 'POST', 'notify', {source: 'match', message: 'goal', mode: 'full', image: 'http://pics.test/a.png', image2: 'http://pics.test/b.png', open: false});
+    const e = await recentOne(s);
+    assert.equal(e.mode, 'overlay');
+    assert.equal(e.image2, 'http://pics.test/b.png');
 }));
 
 test('overlayOpacity is a setting (20-100) and goes into the job file', () => withShard(async (s, commands, dir) => {

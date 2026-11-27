@@ -57,15 +57,15 @@
     {
       "id": "notification-center",
       "name": "Notification Center",
-      "version": "0.26.1",
+      "version": "0.27.0",
       "author": "mclaudiopt",
       "description": "Native TV banners and an overlay bar for notifications from any LAN device, with optional sounds. Runs fixed commands only; fetches an image URL only if sent.",
       "permissions": [
         "exec"
       ],
-      "url": "dist/notification-center-0.26.1.vplugin",
-      "sha256": "226faf8007c8d3393f718c88075ab1393d95ad1fce54f33e054f205f590b066e",
-      "size": 500863
+      "url": "dist/notification-center-0.27.0.vplugin",
+      "sha256": "411e52b45b6a440a891021a483737af20f41385f0ec551ee1076c2974fdd6a12",
+      "size": 507205
     },
     {
       "id": "prometheus",

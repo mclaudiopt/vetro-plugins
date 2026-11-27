@@ -53,7 +53,7 @@ themselves, the styles in `app/service/dashboard.js`.
 It runs only when a request has a `sound` (or calls `POST play`), at most once every 0.8 s, with an 8 second timeout. The goodie (`POST play` with `song`) runs the same command several times in a row from a fixed list in the code (10 seconds, one song at a time). It is the only use of `exec` in the code, and the tests check the exact shape of every command.
 ### The overlay bar
 
-`mode: overlay` runs the Shard's own helper, `dotnet <dir>/ncoverlay.dll --file <dir>/job.txt`, with the TV's `dotnet`. `<dir>` is `/home/owner/share/tmp/ncoverlay`, where the Shard unpacks the helper from `overlay/ncoverlay.dll.b64` (source: `overlay/Overlay.cs`). The text, colour, seconds, opacity and the path of a PNG icon are written into `job.txt`, one value per line, so no request text is ever on a command line. The helper draws a transparent notification-level window (the same kind the Vetro launcher uses), decodes the PNG itself, and exits after the duration. A new bar closes the previous one first (by its pid file, only when `/proc/<pid>/cmdline` contains `ncoverlay`).
+`mode: overlay` runs the Shard's own helper, `dotnet <dir>/ncoverlay.dll --file <dir>/job.txt`, with the TV's `dotnet`. `<dir>` is `/home/owner/share/tmp/ncoverlay`, where the Shard unpacks the helper from `overlay/ncoverlay.dll.b64` (source: `overlay/Overlay.cs`). The text, colour, seconds, opacity and the paths of up to two PNG icons (`image` on the left, `image2` on the right) are written into `job.txt`, one value per line, so no request text is ever on a command line. A banner request with a picture is shown this way too, because the Samsung banner has no pictures. The helper draws a transparent notification-level window (the same kind the Vetro launcher uses), decodes the PNG itself, and exits after the duration. A new bar closes the previous one first (by its pid file, only when `/proc/<pid>/cmdline` contains `ncoverlay`).
 
 ## Network
 
@@ -61,7 +61,7 @@ It runs only when a request has a `sound` (or calls `POST play`), at most once e
   `api`, `ui`, `nt.js`), open to every device that can reach Vetro (with pairing on, senders need a key).
 - **Outgoing, Vetro:** `POST 127.0.0.1:8099/apps/launch` with `{"appId": "..."}` to start the companion app or its service. The app id is fixed in the
   code, so no route can point the Shard at another app. Launches of the app screen are limited to one every 2 seconds; the banner service is launched for every notification in banner mode (limit a noisy sender with its per-minute rate in "Sources").
-- **Outgoing, images:** no code is downloaded. The one exception is the optional `image` and `wallpaper` fields: the Shard fetches that URL once (GET, up
+- **Outgoing, images:** no code is downloaded. The one exception is the optional `image`, `image2` and `wallpaper` fields: the Shard fetches that URL once (GET, up
   to 3 redirects, at most 2 downloads at once, 10 s in total each, at most 3 MB, only png/jpeg/gif/webp/bmp, kept in memory while queued) and serves it to the app from its own address, because the
   app may only load origins it declares. Whoever can send notifications can therefore make the TV fetch an image URL, including one on your LAN (that is
   how a doorbell snapshot works).
@@ -71,7 +71,7 @@ It runs only when a request has a `sound` (or calls `POST play`), at most once e
 ## Data it keeps
 
 In `ctx.config` (on the TV, kept across restarts and updates):
-- the display language, and the list of the last 20 notifications sent (title, message, level, mode, icon, sound, image and wallpaper URLs, time), so "Recently sent" and Resend survive a restart;
+- the display language, and the list of the last 20 notifications sent (title, message, level, mode, icon, sound, picture and wallpaper URLs, time), so "Recently sent" and Resend survive a restart;
 - the **sources** (profiles): per sender its icon, level, mode, duration, sound, volume, rate limit and on/off switch, and its **key in plain text** if it has one (the API never returns a key, only `hasKey`; but it is stored as text in the Shard's settings);
 - the **settings**: quiet hours, grouping window, strict mode, sound volume and sound delay;
 - the **webhooks** (their templates).

@@ -145,6 +145,14 @@ test('the picture and wallpaper addresses are built from the id on the Shard, en
     assert.ok(!all.some(s => /pics\.test/.test(s)), 'the app never loads the sender URL directly');
 });
 
+test('two pictures (for example two club logos) are both on the card, each from the Shard; image2 alone works too', () => {
+    const env = makeEnv({queue: [note({id: 'match', mode: 'full', image: 'http://pics.test/home.png', image2: 'http://pics.test/away.png'}), note({id: 'solo', mode: 'full', image2: 'http://pics.test/away.png'})]});
+    env.run();
+    const all = [];
+    (function walk(n) { n.children.forEach(c => { if (c.tagName === 'IMG') all.push(c.src.replace(/^.*\/api\//, '')); walk(c); }); })(env.body);
+    assert.deepEqual(all, ['img?id=match', 'img?kind=image2&id=match', 'img?kind=image2&id=solo']);
+});
+
 test('when XHR is blocked it falls back to the script form, and it also tries the address it was loaded from', () => {
     const env = makeEnv({xhrFails: true, scriptSrc: 'http://192.168.1.50:8099/plugins/notification-center/api/nt.js?t=2', queue: [note()]});
     env.run();

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.27.0
+
+- **Pictures for every Shard (club logos and the like):** new field `image2`, a second picture with the same rules as `image` (home and away). The bottom toast draws `image` on the left and `image2` on the right; the full-screen card shows both. `GET api` lists the feature `image2`; `GET notifications`, `GET recent` and `GET img?kind=image2` carry it, and Resend keeps it.
+- **Change:** a banner request (or one without `mode`) that has a picture (`image`, `app` or `image2`) is shown as the bottom toast, because the Samsung banner cannot show pictures. When the bar cannot be drawn it stays a banner; requests without a picture are unchanged.
+- **Bottom toast:** palette and grey PNGs with 1, 2 or 4 bits are drawn too; a logo that is not square keeps its shape; no empty space is left for a picture that cannot be decoded.
+
 ## 0.26.1
 
 - **Fix:** when the banner service says it could not post a banner, or could not read the queue, the open app screen posts the banner instead of leaving it to nobody; a banner the service did post is still not repeated.

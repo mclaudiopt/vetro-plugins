@@ -6,7 +6,8 @@
 //
 // The job file is UTF-8 text, one value per line (never shell arguments, so no text can reach a shell):
 //   1 title (may be empty)   2 message   3 accent colour as 6 hex digits   4 seconds (1-120)   5 opacity of the bar (20-100)
-//   6 optional: absolute path of a PNG icon (decoded by this program; up to 2 MB and 1024x1024)
+//   6 optional: absolute path of a PNG icon, drawn on the left (decoded by this program; up to 2 MB and 1024x1024)
+//   7 optional: absolute path of a second PNG icon, drawn on the right (for example the away club)
 using System;
 using System.IO;
 using System.Globalization;
@@ -17,7 +18,7 @@ internal static class NcOverlay
     private const int ElmWinNotification = 12;
     private const int NotificationLevelTop = 40;
     private const int ScreenW = 1920, ScreenH = 1080;
-    private const int BarW = 1600, BarMarginBottom = 90, LineChars = 66, Radius = 36;
+    private const int BarW = 1600, BarMarginBottom = 90, LineChars = 66, LineCharsTwoIcons = 56, IconSize = 128, Radius = 36;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int TaskCb(IntPtr data);
 
@@ -97,7 +98,8 @@ internal static class NcOverlay
         return img;
     }
 
-    // A small PNG decoder (8-bit grey, grey+alpha, RGB, RGBA and palette; not interlaced), because the EFL image loader is not available to this process.
+    // A small PNG decoder (grey, grey+alpha, RGB, RGBA and palette with 8 bits per channel, grey and palette also with 1, 2 or 4; not interlaced),
+    // because the EFL image loader is not available to this process.
     // Returns premultiplied-free RGBA bytes, or null for anything it does not understand or that is too big.
     private static byte[] DecodePng(byte[] f, out int w, out int h)
     {
@@ -124,11 +126,12 @@ internal static class NcOverlay
             else if (type == "IEND") break;
             pos += 12 + len;
         }
-        if (w < 1 || h < 1 || w > 1024 || h > 1024 || depth != 8 || interlace != 0) return null;
+        if (w < 1 || h < 1 || w > 1024 || h > 1024 || interlace != 0) return null;
+        if (depth != 8 && !((depth == 1 || depth == 2 || depth == 4) && (ctype == 0 || ctype == 3))) return null;
         int ch;
         switch (ctype) { case 0: ch = 1; break; case 2: ch = 3; break; case 3: ch = 1; break; case 4: ch = 2; break; case 6: ch = 4; break; default: return null; }
         if (ctype == 3 && plte == null) return null;
-        int stride = w * ch, rawLen = (stride + 1) * h;
+        int stride = (w * ch * depth + 7) / 8, bpp = depth == 8 ? ch : 1, rawLen = (stride + 1) * h;
         byte[] raw = new byte[rawLen];
         idat.Position = 2;   // skip the zlib header
         try
@@ -147,7 +150,7 @@ internal static class NcOverlay
             int ft = raw[y * (stride + 1)], src = y * (stride + 1) + 1, dst = y * stride;
             for (int x = 0; x < stride; x++)
             {
-                int a = x >= ch ? pix[dst + x - ch] : 0, b = y > 0 ? pix[dst - stride + x] : 0, c = (x >= ch && y > 0) ? pix[dst - stride + x - ch] : 0, v = raw[src + x];
+                int a = x >= bpp ? pix[dst + x - bpp] : 0, b = y > 0 ? pix[dst - stride + x] : 0, c = (x >= bpp && y > 0) ? pix[dst - stride + x - bpp] : 0, v = raw[src + x];
                 switch (ft)
                 {
                     case 1: v += a; break;
@@ -161,6 +164,20 @@ internal static class NcOverlay
                 }
                 pix[dst + x] = (byte)v;
             }
+        }
+        if (depth < 8)   // several pixels per byte, the first one in the high bits: one byte per pixel from here on
+        {
+            int mask = (1 << depth) - 1;
+            byte[] one = new byte[w * h];
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    int v = (pix[y * stride + x * depth / 8] >> (8 - depth - x * depth % 8)) & mask;
+                    one[y * w + x] = (byte)(ctype == 0 ? v * 255 / mask : v);
+                }
+            }
+            pix = one;
         }
         byte[] rgba = new byte[w * h * 4];
         for (int i = 0; i < w * h; i++)
@@ -184,58 +201,59 @@ internal static class NcOverlay
         return rgba;
     }
 
-    // The icon scaled to size x size (box filter), with rounded corners, drawn through the same pixel-buffer path as the bar.
-    private static void Icon(IntPtr evas, int x, int y, int size, string path)
+    // The pixels of an icon file, or null when there is none or it cannot be decoded (the bar is then laid out without it).
+    private static byte[] LoadIcon(string path, out int w, out int h)
     {
-        try
+        w = 0; h = 0;
+        try { return path.Length > 0 && Path.IsPathRooted(path) && File.Exists(path) ? DecodePng(File.ReadAllBytes(path), out w, out h) : null; }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+    }
+
+    // The icon fitted into a square of `size`, keeping its shape (box filter), with rounded corners, drawn through the same pixel-buffer path as the bar.
+    private static void Icon(IntPtr evas, int x, int y, int size, byte[] src, int w, int h)
+    {
+        int dw = w >= h ? size : Math.Max(1, w * size / h), dh = h >= w ? size : Math.Max(1, h * size / w);
+        int[] px = new int[dw * dh];
+        int rad = Math.Min(dw, dh) / 5;
+        for (int j = 0; j < dh; j++)
         {
-            if (!Path.IsPathRooted(path) || !File.Exists(path)) return;
-            int w, h;
-            byte[] src = DecodePng(File.ReadAllBytes(path), out w, out h);
-            if (src == null) return;
-            int[] px = new int[size * size];
-            int rad = size / 5;
-            for (int j = 0; j < size; j++)
+            for (int i = 0; i < dw; i++)
             {
-                for (int i = 0; i < size; i++)
+                int x0 = i * w / dw, x1 = Math.Max(x0 + 1, (i + 1) * w / dw), y0 = j * h / dh, y1 = Math.Max(y0 + 1, (j + 1) * h / dh);
+                long sr = 0, sg = 0, sb = 0, sa = 0; int n = 0;
+                for (int yy = y0; yy < y1 && yy < h; yy++)
                 {
-                    int x0 = i * w / size, x1 = Math.Max(x0 + 1, (i + 1) * w / size), y0 = j * h / size, y1 = Math.Max(y0 + 1, (j + 1) * h / size);
-                    long sr = 0, sg = 0, sb = 0, sa = 0; int n = 0;
-                    for (int yy = y0; yy < y1 && yy < h; yy++)
+                    for (int xx = x0; xx < x1 && xx < w; xx++)
                     {
-                        for (int xx = x0; xx < x1 && xx < w; xx++)
-                        {
-                            int o = (yy * w + xx) * 4, al = src[o + 3];
-                            sr += src[o] * al; sg += src[o + 1] * al; sb += src[o + 2] * al; sa += al; n++;
-                        }
+                        int o = (yy * w + xx) * 4, al = src[o + 3];
+                        sr += src[o] * al; sg += src[o + 1] * al; sb += src[o + 2] * al; sa += al; n++;
                     }
-                    if (n == 0) continue;
-                    double dx = 0, dy = 0;
-                    if (i < rad) dx = rad - 0.5 - i; else if (i >= size - rad) dx = i - (size - rad) + 0.5;
-                    if (j < rad) dy = rad - 0.5 - j; else if (j >= size - rad) dy = j - (size - rad) + 0.5;
-                    double cover = 1.0;
-                    if (dx > 0 && dy > 0) { double d = Math.Sqrt(dx * dx + dy * dy); cover = d <= rad - 1 ? 1.0 : d >= rad ? 0.0 : rad - d; }
-                    double alpha = (sa / (double)n) / 255.0 * cover;   // premultiplied: colour = average of (colour * alpha) already
-                    int pa = (int)Math.Round(alpha * 255);
-                    double norm = sa > 0 ? 1.0 / sa : 0;   // weighted average colour, then premultiplied by the final alpha
-                    int pr = (int)Math.Round(sr * norm * alpha), pg = (int)Math.Round(sg * norm * alpha), pb = (int)Math.Round(sb * norm * alpha);
-                    px[j * size + i] = (pa << 24) | (pr << 16) | (pg << 8) | pb;
                 }
+                if (n == 0) continue;
+                double dx = 0, dy = 0;
+                if (i < rad) dx = rad - 0.5 - i; else if (i >= dw - rad) dx = i - (dw - rad) + 0.5;
+                if (j < rad) dy = rad - 0.5 - j; else if (j >= dh - rad) dy = j - (dh - rad) + 0.5;
+                double cover = 1.0;
+                if (dx > 0 && dy > 0) { double d = Math.Sqrt(dx * dx + dy * dy); cover = d <= rad - 1 ? 1.0 : d >= rad ? 0.0 : rad - d; }
+                double alpha = (sa / (double)n) / 255.0 * cover;   // premultiplied: colour = average of (colour * alpha) already
+                int pa = (int)Math.Round(alpha * 255);
+                double norm = sa > 0 ? 1.0 / sa : 0;   // weighted average colour, then premultiplied by the final alpha
+                int pr = (int)Math.Round(sr * norm * alpha), pg = (int)Math.Round(sg * norm * alpha), pb = (int)Math.Round(sb * norm * alpha);
+                px[j * dw + i] = (pa << 24) | (pr << 16) | (pg << 8) | pb;
             }
-            IntPtr mem = Marshal.AllocHGlobal(px.Length * 4);
-            Marshal.Copy(px, 0, mem, px.Length);
-            IntPtr img = evas_object_image_add(evas);
-            evas_object_image_alpha_set(img, 1);
-            evas_object_image_size_set(img, size, size);
-            evas_object_image_data_set(img, mem);
-            evas_object_image_data_update_add(img, 0, 0, size, size);
-            evas_object_image_fill_set(img, 0, 0, size, size);
-            evas_object_move(img, x, y);
-            evas_object_resize(img, size, size);
-            evas_object_show(img);
         }
-        catch (IOException) { /* no icon: the bar is shown without it */ }
-        catch (UnauthorizedAccessException) { }
+        IntPtr mem = Marshal.AllocHGlobal(px.Length * 4);
+        Marshal.Copy(px, 0, mem, px.Length);
+        IntPtr img = evas_object_image_add(evas);
+        evas_object_image_alpha_set(img, 1);
+        evas_object_image_size_set(img, dw, dh);
+        evas_object_image_data_set(img, mem);
+        evas_object_image_data_update_add(img, 0, 0, dw, dh);
+        evas_object_image_fill_set(img, 0, 0, dw, dh);
+        evas_object_move(img, x + (size - dw) / 2, y + (size - dh) / 2);
+        evas_object_resize(img, dw, dh);
+        evas_object_show(img);
     }
 
     private static void Text(IntPtr evas, int x, int y, string value, int size, int r, int g, int b)
@@ -273,19 +291,21 @@ internal static class NcOverlay
         opacity = Math.Max(20, Math.Min(100, opacity));
         if (title.Length == 0 && message.Length == 0) return 2;
 
+        int w1, h1, w2, h2;
+        byte[] icon1 = LoadIcon(at(5).Trim(), out w1, out h1), icon2 = LoadIcon(at(6).Trim(), out w2, out h2);
+        // With a logo on each side the text has less room, so the lines are shorter.
+        int lineChars = icon1 != null && icon2 != null ? LineCharsTwoIcons : LineChars;
         string line1 = message, line2 = "";
-        if (message.Length > LineChars)
+        if (message.Length > lineChars)
         {
-            int cut = message.LastIndexOf(' ', LineChars);
-            if (cut < LineChars / 2) cut = LineChars;
+            int cut = message.LastIndexOf(' ', lineChars);
+            if (cut < lineChars / 2) cut = lineChars;
             line1 = message.Substring(0, cut).TrimEnd();
-            line2 = Clip(message.Substring(cut).TrimStart(), LineChars);
+            line2 = Clip(message.Substring(cut).TrimStart(), lineChars);
         }
         int lineCount = (title.Length > 0 ? 1 : 0) + (line1.Length > 0 ? 1 : 0) + (line2.Length > 0 ? 1 : 0);
-        string icon = at(5).Trim();
-        bool hasIcon = icon.Length > 0 && Path.IsPathRooted(icon) && File.Exists(icon);
         int textH = 56 + lineCount * 58;
-        int bodyH = hasIcon ? Math.Max(textH, 176) : textH;
+        int bodyH = icon1 != null || icon2 != null ? Math.Max(textH, IconSize + 48) : textH;
         int top = ScreenH - BarMarginBottom - bodyH, left = (ScreenW - BarW) / 2;
 
         elm_init(0, IntPtr.Zero);
@@ -306,7 +326,8 @@ internal static class NcOverlay
         RoundedRect(evas, left, top, BarW, bodyH, Radius, 10, 12, 18, 255 * opacity / 100);
         RoundedRect(evas, left + 22, top + 20, 12, bodyH - 40, 6, (accent >> 16) & 255, (accent >> 8) & 255, accent & 255, 255);
         int tx = left + 58, ty = top + (bodyH - textH) / 2 + 24;
-        if (hasIcon) { Icon(evas, left + 58, top + (bodyH - 128) / 2, 128, icon); tx = left + 58 + 128 + 30; }
+        if (icon1 != null) { Icon(evas, left + 58, top + (bodyH - IconSize) / 2, IconSize, icon1, w1, h1); tx = left + 58 + IconSize + 30; }
+        if (icon2 != null) { Icon(evas, left + BarW - 58 - IconSize, top + (bodyH - IconSize) / 2, IconSize, icon2, w2, h2); }
         if (title.Length > 0) { Text(evas, tx, ty, title, 46, 255, 255, 255); ty += 62; }
         if (line1.Length > 0) { Text(evas, tx, ty, line1, 38, 214, 222, 238); ty += 54; }
         if (line2.Length > 0) { Text(evas, tx, ty, line2, 38, 214, 222, 238); }

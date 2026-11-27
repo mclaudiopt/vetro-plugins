@@ -374,7 +374,7 @@ button.chip { cursor: pointer; background: var(--danger-soft); }
             <div><label class="lab" for="s_name" data-t="f_name">Name</label><input type="text" id="s_name" maxlength="32" placeholder="doorbell"></div>
             <div><label class="lab" for="s_icon" data-t="f_icon">Icon</label><input type="text" id="s_icon" maxlength="16"></div>
             <div><label class="lab" for="s_level" data-t="f_level">Level</label><select id="s_level"><option value=""></option><option>info</option><option>ok</option><option>warn</option><option>alert</option></select></div>
-            <div><label class="lab" for="s_mode" data-t="f_mode">Show as</label><select id="s_mode"><option value=""></option><option>banner</option><option>full</option><option>both</option><option>overlay</option><option>glass</option><option>panel</option></select></div>
+            <div><label class="lab" for="s_mode" data-t="f_mode">Show as</label><select id="s_mode"><option value=""></option><option>banner</option><option>full</option><option>overlay</option><option>glass</option><option>panel</option></select></div>
             <div><label class="lab" for="s_theme" data-t="f_theme">Default wallpaper</label><select id="s_theme"><option value=""></option></select></div>
             <div><label class="lab" for="s_priority" data-t="lab_prio">How urgent is it?</label><select id="s_priority"><option value="">normal</option><option value="high">high</option></select></div>
             <div><label class="lab" for="s_dur" data-t="f_dur">Duration (s)</label><input type="text" id="s_dur" inputmode="numeric" maxlength="2"></div>
@@ -414,7 +414,7 @@ button.chip { cursor: pointer; background: var(--danger-soft); }
         </div>
         <div>
           <h3 style="margin-top:22px" data-t="t_show">Try each way to show a message</h3>
-          <div class="row"><button type="button" class="ghost" data-stm="banner" data-t="st_tb">Default Notification</button><button type="button" class="ghost" data-stm="full" data-t="st_tc">Full screen</button><button type="button" class="ghost" data-stm="both" data-t="st_tboth">Both</button><button type="button" class="ghost" data-stm="overlay" data-t="m_overlay">Bar</button><button type="button" class="ghost" data-stm="glass" data-t="m_glass">Glass bar</button><button type="button" class="ghost" data-stm="panel" data-t="m_panel">Panel</button></div>
+          <div class="row"><button type="button" class="ghost" data-stm="banner" data-t="st_tb">Default Notification</button><button type="button" class="ghost" data-stm="full" data-t="st_tc">Full screen</button><button type="button" class="ghost" data-stm="overlay" data-t="m_overlay">Bar</button><button type="button" class="ghost" data-stm="glass" data-t="m_glass">Glass bar</button><button type="button" class="ghost" data-stm="panel" data-t="m_panel">Panel</button></div>
           <div class="msg" id="stmsg" style="padding:8px 0 0"></div>
           <h3 style="margin-top:22px" data-t="t_sound">Sounds</h3>
           <div class="msg" id="tsoundnote" style="padding:0 0 8px"></div>
@@ -430,7 +430,7 @@ button.chip { cursor: pointer; background: var(--danger-soft); }
         <div>
           <h3 data-t="set_notif">Notification</h3>
           <span class="lab" id="tdef-name" data-t="f_def">Look when the sender names none</span>
-          <div class="modes" id="tdef" role="group" aria-labelledby="tdef-name"><button type="button" class="md" aria-pressed="false" data-def="banner" data-t="m_banner"></button><button type="button" class="md" aria-pressed="false" data-def="full" data-t="m_full"></button><button type="button" class="md" aria-pressed="false" data-def="both" data-t="m_both"></button><button type="button" class="md" aria-pressed="false" data-def="overlay" data-t="m_overlay"></button><button type="button" class="md" aria-pressed="false" data-def="glass" data-t="m_glass"></button><button type="button" class="md" aria-pressed="false" data-def="panel" data-t="m_panel"></button></div>
+          <div class="modes" id="tdef" role="group" aria-labelledby="tdef-name"><button type="button" class="md" aria-pressed="false" data-def="banner" data-t="m_banner"></button><button type="button" class="md" aria-pressed="false" data-def="full" data-t="m_full"></button><button type="button" class="md" aria-pressed="false" data-def="overlay" data-t="m_overlay"></button><button type="button" class="md" aria-pressed="false" data-def="glass" data-t="m_glass"></button><button type="button" class="md" aria-pressed="false" data-def="panel" data-t="m_panel"></button></div>
           <div class="setting"><label for="tbim" id="tbim-name" data-t="tbim">Show a banner with a picture as a bar</label><label class="switch"><input type="checkbox" role="switch" id="tbim" aria-labelledby="tbim-name"><span aria-hidden="true"></span></label></div>
           <div class="setting"><label for="tbao" id="tbao-name" data-t="tbao">Show banners as a toast bar</label><label class="switch"><input type="checkbox" role="switch" id="tbao" aria-labelledby="tbao-name"><span aria-hidden="true"></span></label></div>
           <span class="lab" id="tovpos-name" data-t="f_ovpos">Where the bar appears</span>
@@ -595,7 +595,7 @@ button.chip { cursor: pointer; background: var(--danger-soft); }
     }
   }
   function paintModes() {
-    var MODES = ["banner", "full", "both", "overlay", "glass", "panel"];
+    var MODES = ["banner", "full", "overlay", "glass", "panel"];
     $("modehint").textContent = tr("mh_" + mode);
     $("modes").innerHTML = MODES.map(function (m) {
       return '<button type="button" class="md' + (m === mode ? " on" : "") + '" aria-pressed="' + (m === mode) + '" data-m="' + m + '">' + esc(tr("m_" + m)) + "</button>";
@@ -1070,7 +1070,7 @@ button.chip { cursor: pointer; background: var(--danger-soft); }
       $("s_cats").innerHTML = names.length ? names.map(function (c) {
         var v = own.call(saved, c) ? saved[c] : {};
         return '<details class="help" data-cat="' + esc(c) + '"><summary>' + esc(c) + '</summary><div class="rulesgrid">' +
-          '<label class="lab">' + esc(tr("f_mode")) + '<select data-f="mode">' + opts(["banner", "full", "both", "overlay", "glass", "panel"], v.mode, tr("use_src")) + "</select></label>" +
+          '<label class="lab">' + esc(tr("f_mode")) + '<select data-f="mode">' + opts(["banner", "full", "overlay", "glass", "panel"], v.mode, tr("use_src")) + "</select></label>" +
           '<label class="lab">' + esc(tr("f_sound")) + '<select data-f="sound">' + opts(sounds, v.sound, tr("use_src")) + "</select></label>" +
           '<label class="lab">' + esc(tr("f_vol")) + '<input type="text" inputmode="numeric" data-f="volume" maxlength="3" value="' + esc(v.volume || "") + '"></label>' +
           '<label class="lab">' + esc(tr("f_dur")) + '<input type="text" inputmode="numeric" data-f="duration" maxlength="2" value="' + esc(v.duration || "") + '"></label></div></details>';

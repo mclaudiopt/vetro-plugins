@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.30.2
+
+- The panel no longer offers "Both"; requests with `mode: both` work as before.
+
 ## 0.30.1
 
 - The club goal examples left the panel: the news Shard (Match alerts) simulates goals itself, with its own clubs and options.

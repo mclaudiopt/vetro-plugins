@@ -10,7 +10,7 @@ const create = require(path.join(folder, 'index.js'));
 const rules = require(path.join(folder, 'rules.js'));
 
 function start() {
-    let config = {};
+    let config = {settings: {defaultMode: 'banner'}};   // these tests exercise the banner queue
     const shard = create({
         id: 'notification-center', dir: fs.mkdtempSync(path.join(os.tmpdir(), 'nc-hard-')),
         config: {get: () => JSON.parse(JSON.stringify(config)), set: v => { config = JSON.parse(JSON.stringify(v)); }},
@@ -185,7 +185,7 @@ test('at most 2 picture downloads run at once, the rest wait, and stop() aborts 
 test('the queue file is written under a temporary name and renamed, leaving no temp files', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nc-qf-'));
     const target = path.join(dir, 'queue.json');
-    let config = {};
+    let config = {settings: {defaultMode: 'banner'}};   // these tests exercise the banner queue
     const s = create({id: 'notification-center', dir, config: {get: () => config, set: v => { config = v; }}, execute: () => Promise.reject(new Error('no exec')), queueFile: target});
     if (s.start) s.start();
     try {

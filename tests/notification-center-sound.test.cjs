@@ -15,7 +15,8 @@ const SHAPE = /^paplay --volume=\d{1,6} \/usr\/share\/feedback\/sound\/operation
 const DIR = '/usr/share/feedback/sound/operation/';
 
 function start(options = {}) {
-    let config = options.seed || {};
+    let config = Object.assign({}, options.seed);
+    config.settings = Object.assign({defaultMode: 'banner'}, config.settings);   // these tests exercise the banner queue
     const commands = [];
     const ctx = {
         id: 'notification-center', dir: fs.mkdtempSync(path.join(os.tmpdir(), 'nc-sound-')),

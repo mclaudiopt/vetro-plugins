@@ -10,7 +10,7 @@ const create = require(path.join(folder, 'index.js'));
 
 function start() {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nc-test-'));
-    let config = {};
+    let config = {settings: {defaultMode: 'banner'}};   // these tests exercise the banner queue
     const ctx = {
         id: 'notification-center', dir,
         config: {get: () => JSON.parse(JSON.stringify(config)), set: v => { config = JSON.parse(JSON.stringify(v)); }},

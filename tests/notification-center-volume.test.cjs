@@ -13,7 +13,8 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const vol = (percent, master = 100) => Math.round(65536 * percent / 100 * master / 100 * 3);
 
 function start(options = {}) {
-    let config = options.seed || {};
+    let config = Object.assign({}, options.seed);
+    config.settings = Object.assign({defaultMode: 'banner'}, config.settings);   // these tests exercise the banner queue
     const commands = [];
     const ctx = {
         id: 'notification-center', dir: fs.mkdtempSync(path.join(os.tmpdir(), 'nc-vol-')),

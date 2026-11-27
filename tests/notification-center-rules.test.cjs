@@ -74,7 +74,8 @@ test('rate limiter allows N per minute per source', () => {
 });
 
 function start(seed) {
-    let config = seed || {};
+    let config = Object.assign({}, seed);
+    config.settings = Object.assign({defaultMode: 'banner'}, config.settings);   // these tests exercise the banner queue
     const shard = create({
         id: 'notification-center', dir: fs.mkdtempSync(path.join(os.tmpdir(), 'nc-rules-')),
         config: {get: () => JSON.parse(JSON.stringify(config)), set: v => { config = JSON.parse(JSON.stringify(v)); }},

@@ -170,7 +170,7 @@ function sanitizeSettings(s, old) {
         // One sound for everything: replaces whatever sound a notification asks for; '' = each keeps its own. Silent ones stay silent.
         oneSound: has(s, 'oneSound') ? (hasSound(s.oneSound) ? s.oneSound : '') : str(old.oneSound),
         // The look of a request that names none (and whose sender sets none), and whether a banner with a picture is drawn as the bar.
-        defaultMode: has(MODES, s.defaultMode) ? s.defaultMode : (has(MODES, old.defaultMode) ? old.defaultMode : 'banner'),
+        defaultMode: has(MODES, s.defaultMode) ? s.defaultMode : (has(MODES, old.defaultMode) ? old.defaultMode : 'glass'),
         bannerImageAsBar: has(s, 'bannerImageAsBar') ? s.bannerImageAsBar === true : old.bannerImageAsBar === true,
         // For a TV whose native banner does not show: `banner` requests (also the ones without a mode) are drawn as the overlay bar.
         bannerAsOverlay: has(s, 'bannerAsOverlay') ? s.bannerAsOverlay === true : old.bannerAsOverlay === true,

@@ -12,7 +12,8 @@ const rules = require(path.join(folder, 'rules.js'));
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function start(options = {}) {
-    let config = options.seed || {};
+    let config = Object.assign({}, options.seed);
+    config.settings = Object.assign({defaultMode: 'banner'}, config.settings);   // these tests exercise the banner queue
     const commands = [];
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nc-ovl-'));
     const ctx = {
@@ -365,8 +366,8 @@ test('the helper keeps a still bar for a TV where the animator cannot run', () =
 });
 
 
-test('overlay is the flat bar, glass and panel say their look in the job file', () => withShard(async (s, commands, dir) => {
-    for (const [mode, look] of [['overlay', ''], ['glass', 'glass'], ['panel', 'panel']]) {
+test('overlay is drawn as the glass bar; the job file says the look', () => withShard(async (s, commands, dir) => {
+    for (const [mode, look] of [['overlay', 'glass'], ['glass', 'glass'], ['panel', 'panel']]) {
         const r = await call(s, 'POST', 'notify', {message: mode, mode, group: false, replace: 'one'});
         assert.equal(r.json.effective.mode, mode);
         assert.equal(r.json.effective.duration, 8);
@@ -398,9 +399,9 @@ test('defaultMode is the look of a request that names none; a named look and a s
     assert.equal(await mode({}), 'glass');
 }));
 
-test('the new look settings are cleaned, and are banner and off by default', () => {
+test('the new look settings are cleaned, and are glass and off by default', () => {
     const s = rules.sanitizeSettings({}, {});
-    assert.deepEqual([s.defaultMode, s.bannerImageAsBar], ['banner', false]);
+    assert.deepEqual([s.defaultMode, s.bannerImageAsBar], ['glass', false]);
     const kept = rules.sanitizeSettings({defaultMode: 'x', bannerImageAsBar: 'yes'}, {defaultMode: 'panel', bannerImageAsBar: true});
     assert.deepEqual([kept.defaultMode, kept.bannerImageAsBar], ['panel', false]);
 });
@@ -414,3 +415,10 @@ test('highlight names one of the two logos and goes into the job file and the lo
     }
     assert.ok((await call(s, 'GET', 'api')).json.features.includes('highlight'));
 }));
+
+test('a request without a look is the glass bar by default, and the banner when the helper cannot run', async () => {
+    const send = expected => async s => assert.equal((await call(s, 'POST', 'notify', {message: 'm', open: false})).json.effective.mode, expected);
+    const seed = {settings: {defaultMode: undefined}};
+    await withShard(send('glass'), {seed});
+    await withShard(send('banner'), {seed, execute: null});
+});

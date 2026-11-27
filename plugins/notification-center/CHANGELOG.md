@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.30.3
+
+- The default look is now `glass`: a request without `mode` is the glass bar (the banner when the helper cannot run). A TV that saved another default keeps it.
+- One bar only: the panel offers the glass bar, and `mode: overlay` is drawn as it. Turn "Animate the bar" off for a still bar.
+- Panel: the native banner look is now called "Samsung".
+
 ## 0.30.2
 
 - The panel no longer offers "Both"; requests with `mode: both` work as before.

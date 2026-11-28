@@ -318,8 +318,6 @@ button.chip { cursor: pointer; background: var(--danger-soft); }
           <div class="stack"><input type="text" id="image" maxlength="290" data-p="ph_image"><input type="text" id="app" maxlength="64" data-p="ph_app"></div>
           <label class="lab" for="theme" data-t="lab_wall">Background of the full-screen card</label>
           <div class="stack"><select id="theme"><option value="">-</option></select><input type="text" id="wallpaper" maxlength="290" data-p="ph_wall"></div>
-          <label class="lab" for="priority" data-t="lab_prio">How urgent is it?</label>
-          <select id="priority"><option value="" data-t="pr_normal">Normal</option><option value="high" data-t="pr_high">High: first in line, shown even in quiet hours</option></select>
           <label class="lab" for="act_app" data-t="lab_act">A button on the full-screen card that opens an app</label>
           <div class="row"><input type="text" id="act_app" list="applist" maxlength="64" data-p="ph_actapp" style="flex:1"><input type="text" id="act_label" maxlength="24" data-p="ph_actlabel" style="flex:1"></div>
           <datalist id="applist"></datalist>
@@ -849,7 +847,7 @@ button.chip { cursor: pointer; background: var(--danger-soft); }
   $("send").addEventListener("click", function () {
     if (!$("message").value.trim()) { say(tr("need_msg"), "err"); $("message").focus(); return; }
     say(tr("sending"));
-    act(this, api("notify", { title: $("title").value, message: $("message").value, level: level, icon: $("icon").value, image: $("image").value, app: $("app").value, theme: $("theme").value, priority: $("priority").value, action: actionObj(), wallpaper: $("wallpaper").value, mode: mode, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked, sound: $("sound").value, group: false })
+    act(this, api("notify", { title: $("title").value, message: $("message").value, level: level, icon: $("icon").value, image: $("image").value, app: $("app").value, theme: $("theme").value, action: actionObj(), wallpaper: $("wallpaper").value, mode: mode, duration: parseInt($("secs").value, 10) || 8, open: $("open").checked, sound: $("sound").value, group: false })
       .then(function (r) { say(outcome(r), r.status === "suppressed" || r.status === "failed" ? "err" : "ok"); $("message").value = ""; preview(); recent().catch(function () {}); })
       .catch(function (e) { say(e.message, "err"); throw e; }));
   });
@@ -874,7 +872,6 @@ button.chip { cursor: pointer; background: var(--danger-soft); }
     v = urlOk($("image").value); if (v) { o.image = v; }
     v = $("app").value.trim(); if (/^[A-Za-z0-9._-]{1,64}$/.test(v)) { o.app = v; }
     v = $("theme").value; if (v) { o.theme = v; }
-    v = $("priority").value; if (v) { o.priority = v; }
     v = actionObj(); if (v) { o.action = v; }
     v = urlOk($("wallpaper").value); if (v) { o.wallpaper = v; }
     v = parseInt($("secs").value, 10); if (v && v !== 8) { o.duration = v; }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.30.5
+
+- The Send tab no longer asks how urgent a notification is; `priority` in a request and the sender rule work as before.
+
 ## 0.30.4
 
 - Documentation brought up to date. No change in behaviour.
